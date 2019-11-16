@@ -89,10 +89,10 @@ BPFtrace::~BPFtrace()
     waitpid(pid, &status, 0);
   }
 
-  for (const auto& pair : exe_sym_)
+  for (const auto& pair : pid_sym_)
   {
-    if (pair.second.second)
-      bcc_free_symcache(pair.second.second, pair.second.first);
+    if (pair.second)
+      bcc_free_symcache(pair.second, pair.first);
   }
 
   if (ksyms_)
@@ -1703,16 +1703,15 @@ std::string BPFtrace::resolve_usym(uintptr_t addr, int pid, bool show_offset, bo
 
   if (resolve_user_symbols_)
   {
-    std::string pid_exe = get_pid_exe(pid);
-    if (exe_sym_.find(pid_exe) == exe_sym_.end())
+    if (pid_sym_.find(pid) == pid_sym_.end())
     {
       // not cached, create new ProcSyms cache
       psyms = bcc_symcache_new(pid, &symopts);
-      exe_sym_[pid_exe] = std::make_pair(pid, psyms);
+      pid_sym_[pid] = psyms;
     }
     else
     {
-      psyms = exe_sym_[pid_exe].second;
+      psyms = pid_sym_[pid];
     }
   }
 

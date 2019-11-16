@@ -6,7 +6,6 @@
 #include <set>
 #include <vector>
 #include <unordered_map>
-#include <utility>
 
 #include "ast.h"
 #include "attached_probe.h"
@@ -163,7 +162,7 @@ private:
   std::vector<std::unique_ptr<AttachedProbe>> attached_probes_;
   std::vector<std::unique_ptr<AttachedProbe>> special_attached_probes_;
   void* ksyms_{nullptr};
-  std::map<std::string, std::pair<int, void *>> exe_sym_; // exe -> (pid, cache)
+  std::map<int, void *> pid_sym_;
   int ncpus_;
   int online_cpus_;
   std::vector<int> child_pids_;
