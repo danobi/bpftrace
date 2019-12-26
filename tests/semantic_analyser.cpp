@@ -923,18 +923,50 @@ TEST(semantic_analyser, tracepoint)
   test("tracepoint { 1 }", 1);
 }
 
-TEST(semantic_analyser, watchpoint)
+TEST(semantic_analyser, watchpoint_invalid_modes)
 {
-  test("watchpoint::0x1234:8:rw { 1 }", 0);
-  test("watchpoint:/dev/null:0x1234:8:rw { 1 }", 0);
-  test("watchpoint::0x1234:9:rw { 1 }", 1);
-  test("watchpoint::0x1234:8:rwx { 1 }", 1);
-  test("watchpoint::0x1234:8:rx { 1 }", 1);
-  test("watchpoint::0x1234:8:b { 1 }", 1);
-  test("watchpoint::0x1234:8:rww { 1 }", 1);
-  test("watchpoint::0x0:8:rww { 1 }", 1);
+  auto bpftrace = get_mock_bpftrace();
+  bpftrace->pid_ = 123;
+
+#ifdef __x86_64__
+  test(*bpftrace, "watchpoint::0x1234:8:r { 1 }", 1);
+#elif __arm__
+  test(*bpftrace, "watchpoint::0x1234:8:r { 1 }", 0);
+#endif
+  test(*bpftrace, "watchpoint::0x1234:8:rx { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x1234:8:wx { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x1234:8:xw { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x1234:8:rwx { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x1234:8:xx { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x1234:8:b { 1 }", 1);
 }
 
+TEST(semantic_analyser, watchpoint_absolute)
+{
+  auto bpftrace = get_mock_bpftrace();
+  bpftrace->pid_ = 123;
+
+  test(*bpftrace, "watchpoint::0x1234:8:rw { 1 }", 0);
+  test(*bpftrace, "watchpoint::0x1234:9:rw { 1 }", 1);
+  test(*bpftrace, "watchpoint::0x0:8:rw { 1 }", 1);
+
+  bpftrace->pid_ = 0;
+  test(*bpftrace, "watchpoint::0x1234:8:rw { 1 }", 1);
+}
+
+TEST(semantic_analyser, watchpoint_function)
+{
+  auto bpftrace = get_mock_bpftrace();
+  bpftrace->pid_ = 123;
+
+  test(*bpftrace, "watchpoint:func1:2:8:rw { 1 }", 0);
+  test(*bpftrace, "w:func1:2:8:rw { 1 }", 0);
+  test(*bpftrace, "w:func1.one_two#three:2:8:rw { 1 }", 0);
+  test(*bpftrace, "watchpoint:func1:99999:8:rw { 1 }", 1);
+
+  bpftrace->pid_ = 0;
+  test(*bpftrace, "watchpoint:func1:2:8:rw { 1 }", 1);
+}
 
 TEST(semantic_analyser, args_builtin_wrong_use)
 {

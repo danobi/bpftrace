@@ -1442,7 +1442,15 @@ void SemanticAnalyser::visit(AttachPoint &ap)
       error("software count should be a positive integer", ap.loc);
   }
   else if (ap.provider == "watchpoint") {
-    if (!ap.addr)
+    if (bpftrace_.pid_ <= 0 && !bpftrace_.has_child_cmd())
+      error("-p PID or -c CMD required for watchpoint", ap.loc);
+    if (ap.func.size())
+    {
+      if (ap.addr > 9)
+        error("watchpoint cannot specify a function and an absolute address",
+              ap.loc);
+    }
+    else if (!ap.addr)
       error("watchpoint must be attached to a non-zero address", ap.loc);
     if (ap.len != 1 && ap.len != 2 && ap.len != 4 && ap.len != 8)
       error("watchpoint length must be one of (1,2,4,8)", ap.loc);
@@ -1455,7 +1463,10 @@ void SemanticAnalyser::visit(AttachPoint &ap)
       if (ap.mode[i] == ap.mode[i+1])
         error("watchpoint modes may not be duplicated", ap.loc);
     }
-    if (ap.mode == "rx" || ap.mode == "wx" || ap.mode == "rwx")
+    const auto invalid_modes = arch::invalid_watchpoint_modes();
+    if (std::any_of(invalid_modes.cbegin(),
+                    invalid_modes.cend(),
+                    [&](const auto &mode) { return mode == ap.mode; }))
       error("watchpoint modes (rx, wx, rwx) not allowed", ap.loc);
   }
   else if (ap.provider == "hardware") {
