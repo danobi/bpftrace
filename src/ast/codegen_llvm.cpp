@@ -1427,8 +1427,9 @@ void CodegenLLVM::visit(Probe &probe)
   if (probe.need_expansion == false) {
     // build a single BPF program pre-wildcards
     Function *func = Function::Create(func_type, Function::ExternalLinkage, probe.name(), module_.get());
-    probe.set_index(getNextIndexForProbe(probe.name()));
-    func->setSection(getSectionNameForProbe(probe.name(), probe.index()));
+    int index = getNextIndexForProbe(probe.name());
+    probe.set_index(index);
+    func->setSection(get_section_name_for_probe(probe.name(), index));
     BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
     b_.SetInsertPoint(entry);
 
@@ -1506,7 +1507,7 @@ void CodegenLLVM::visit(Probe &probe)
         int index = getNextIndexForProbe(probe.name());
         attach_point->set_index(full_func_id, index);
         Function *func = Function::Create(func_type, Function::ExternalLinkage, probefull_, module_.get());
-        func->setSection(getSectionNameForProbe(probefull_, index));
+        func->setSection(get_section_name_for_probe(probefull_, index));
         BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
         b_.SetInsertPoint(entry);
 
@@ -1539,10 +1540,6 @@ int CodegenLLVM::getNextIndexForProbe(const std::string &probe_name) {
   int index = next_probe_index_[probe_name];
   next_probe_index_[probe_name] += 1;
   return index;
-}
-
-std::string CodegenLLVM::getSectionNameForProbe(const std::string &probe_name, int index) {
-  return "s_" + probe_name + "_" + std::to_string(index);
 }
 
 AllocaInst *CodegenLLVM::getMapKey(Map &map)

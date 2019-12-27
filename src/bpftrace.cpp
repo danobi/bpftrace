@@ -640,10 +640,11 @@ std::unique_ptr<AttachedProbe> BPFtrace::attach_probe(Probe &probe, const BpfOrc
   // and the name builtin, which must be expanded into separate programs per
   // probe), else try to find a the program based on the original probe name
   // that includes wildcards.
-  std::string index_str = "_" + std::to_string(probe.index);
-  auto func = bpforc.sections_.find("s_" + probe.name + index_str);
+  auto func = bpforc.sections_.find(
+      get_section_name_for_probe(probe.name, probe.index));
   if (func == bpforc.sections_.end())
-    func = bpforc.sections_.find("s_" + probe.orig_name + index_str);
+    func = bpforc.sections_.find(
+        get_section_name_for_probe(probe.orig_name, probe.index));
   if (func == bpforc.sections_.end())
   {
     if (probe.name != probe.orig_name)

@@ -119,6 +119,13 @@ std::string str_join(const std::vector<std::string> &list,
                      const std::string &delim);
 bool is_numeric(const std::string &str);
 
+// Generate object file section name for a given probe
+inline std::string get_section_name_for_probe(const std::string &probe_name,
+                                              int index)
+{
+  return "s_" + probe_name + "_" + std::to_string(index);
+}
+
 // trim from end of string (right)
 inline std::string &rtrim(std::string &s)
 {
