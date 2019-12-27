@@ -126,6 +126,20 @@ inline std::string get_section_name_for_probe(const std::string &probe_name,
   return "s_" + probe_name + "_" + std::to_string(index);
 }
 
+inline std::string get_watchpoint_setup_probe_name(
+    const std::string &probe_name)
+{
+  return probe_name + "_wp_setup";
+}
+
+inline std::string get_section_name_for_watchpoint_setup(
+    const std::string &probe_name,
+    int index)
+{
+  return get_section_name_for_probe(get_watchpoint_setup_probe_name(probe_name),
+                                    index);
+}
+
 // trim from end of string (right)
 inline std::string &rtrim(std::string &s)
 {

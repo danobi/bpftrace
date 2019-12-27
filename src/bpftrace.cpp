@@ -100,6 +100,26 @@ BPFtrace::~BPFtrace()
     bcc_free_symcache(ksyms_, -1);
 }
 
+Probe BPFtrace::generateWatchpointSetupProbe(const std::string &func,
+                                             const ast::AttachPoint &ap,
+                                             const ast::Probe &probe)
+{
+  Probe setup_probe;
+  setup_probe.name = get_watchpoint_setup_probe_name(ap.name(func));
+  setup_probe.type = ProbeType::uprobe;
+  if (has_child_cmd())
+    setup_probe.path = cmd_;
+  else if (pid_)
+    setup_probe.path = "/proc/" + std::to_string(pid_) + "/exe";
+  else
+    throw std::runtime_error("-p PID or -c CND required for watchpoint");
+  setup_probe.attach_point = func;
+  setup_probe.orig_name = get_watchpoint_setup_probe_name(probe.name());
+  setup_probe.index = ap.index(func) > 0 ? ap.index(func) : probe.index();
+
+  return setup_probe;
+}
+
 int BPFtrace::add_probe(ast::Probe &p)
 {
   for (auto attach_point : *p.attach_points)
@@ -160,6 +180,14 @@ int BPFtrace::add_probe(ast::Probe &p)
         attach_point->ns = ns;
         // Set the function name to be a resolved function id in case of wildcard
         attach_point->func = func_id;
+      }
+
+      if (probetype(attach_point->provider) == ProbeType::watchpoint &&
+          attach_point->func.size())
+      {
+        probes_.emplace_back(
+            generateWatchpointSetupProbe(func_id, *attach_point, p));
+        continue;
       }
 
       Probe probe;

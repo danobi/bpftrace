@@ -1445,6 +1445,16 @@ void CodegenLLVM::visit(Probe &probe)
 
     b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 
+    for (auto ap : *probe.attach_points)
+    {
+      if (ap->provider == "watchpoint" && ap->func.size())
+      {
+        generateWatchpointSetupProbe(func_type, probe.name(), index);
+        // Only need one b/c the setup probe can be shared for non-expanded
+        // probes
+        break;
+      }
+    }
   } else {
     /*
      * Build a separate BPF program for each wildcard match.
@@ -1521,6 +1531,9 @@ void CodegenLLVM::visit(Probe &probe)
           stmt->accept(*this);
         }
         b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
+
+        if (attach_point->provider == "watchpoint" && attach_point->func.size())
+          generateWatchpointSetupProbe(func_type, probefull_, index);
       }
     }
   }
@@ -1918,6 +1931,29 @@ void CodegenLLVM::createFormatStringCall(Call &call, int &id, CallArgs &call_arg
   b_.CreatePerfEventOutput(ctx_, fmt_args, struct_size);
   b_.CreateLifetimeEnd(fmt_args);
   expr_ = nullptr;
+}
+
+void CodegenLLVM::generateWatchpointSetupProbe(
+    FunctionType *func_type,
+    const std::string &expanded_probe_name,
+    int index)
+{
+  Function *func = Function::Create(func_type,
+                                    Function::ExternalLinkage,
+                                    get_watchpoint_setup_probe_name(
+                                        expanded_probe_name),
+                                    module_.get());
+  func->setSection(
+      get_section_name_for_watchpoint_setup(expanded_probe_name, index));
+  BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
+  b_.SetInsertPoint(entry);
+
+  b_.CreateSignal(b_.getInt32(SIGSTOP));
+
+  // XXX: implement steps 2 & 3
+  // Value *ctx = func->arg_begin();
+
+  b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 }
 
 std::unique_ptr<BpfOrc> CodegenLLVM::compile(DebugLevel debug, std::ostream &out)
