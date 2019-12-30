@@ -163,12 +163,14 @@ std::string AttachPoint::name(const std::string &attach_point) const
   return n;
 }
 
-int AttachPoint::index(std::string name) {
+int AttachPoint::index(const std::string &name) const
+{
   if (index_.count(name) == 0) return 0;
-  return index_[name];
+  return index_.at(name);
 }
 
-void AttachPoint::set_index(std::string name, int index) {
+void AttachPoint::set_index(const std::string &name, int index)
+{
   index_[name] = index;
 }
 
@@ -198,7 +200,8 @@ std::string Probe::name() const
   return n;
 }
 
-int Probe::index() {
+int Probe::index() const
+{
   return index_;
 }
 

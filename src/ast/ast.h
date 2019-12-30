@@ -344,8 +344,9 @@ public:
   void accept(Visitor &v) override;
   std::string name(const std::string &attach_point) const;
 
-  int index(std::string name);
-  void set_index(std::string name, int index);
+  int index(const std::string &name) const;
+  void set_index(const std::string &name, int index);
+
 private:
   std::map<std::string, int> index_;
 };
@@ -365,7 +366,7 @@ public:
   bool need_expansion = false;        // must build a BPF program per wildcard match
   bool need_tp_args_structs = false;  // must import struct for tracepoints
 
-  int index();
+  int index() const;
   void set_index(int index);
 private:
   int index_ = 0;
