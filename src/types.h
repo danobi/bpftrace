@@ -153,10 +153,10 @@ struct Probe
                                 // before wildcard expansion
   std::string name;             // full probe name
   std::string ns;               // for USDT probes, if provider namespace not from path
-  uint64_t loc;                 // for USDT probes
-  uint64_t log_size;
+  uint64_t loc = 0;             // for USDT probes
+  uint64_t log_size = 409600;
   int index = 0;
-  int freq;
+  int freq = 0;
   pid_t pid = -1;
   uint64_t addr = 0;            // for watchpoint probes, start of region
   uint64_t len = 0;             // for watchpoint probes, size of region
