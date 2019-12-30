@@ -180,6 +180,11 @@ AttachedProbe::~AttachedProbe()
     std::cerr << "Error detaching probe: " << probe_.name << std::endl;
 }
 
+const Probe &AttachedProbe::probe() const
+{
+  return probe_;
+}
+
 std::string AttachedProbe::eventprefix() const
 {
   switch (attachtype(probe_.type))

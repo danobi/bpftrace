@@ -10,6 +10,7 @@
 
 #include "ast.h"
 #include "attached_probe.h"
+#include "bpforc.h"
 #include "btf.h"
 #include "imap.h"
 #include "output.h"
@@ -20,7 +21,6 @@
 
 namespace bpftrace {
 
-class BpfOrc;
 enum class DebugLevel;
 
 // globals
@@ -79,6 +79,8 @@ public:
                                      const ast::Probe &probe);
   int num_probes() const;
   int run(std::unique_ptr<BpfOrc> bpforc);
+  std::unique_ptr<AttachedProbe> attach_probe(Probe &probe,
+                                              const BpfOrc &bpforc);
   int print_maps();
   int print_map_ident(const std::string &ident, uint32_t top, uint32_t div);
   int clear_map_ident(const std::string &ident);
@@ -115,12 +117,15 @@ public:
   int spawn_child();
   void kill_child();
 
+  std::vector<std::unique_ptr<AttachedProbe>> attached_probes_;
+  std::vector<Probe> watchpoint_probes_;
   std::string cmd_;
   int pid_{0};
   bool finalize_ = false;
   // Global variable checking if an exit signal was received
   static volatile sig_atomic_t exitsig_recv;
 
+  std::unique_ptr<BpfOrc> bpforc_;
   std::map<std::string, std::unique_ptr<IMap>> maps_;
   std::map<std::string, Struct> structs_;
   std::map<std::string, std::string> macros_;
@@ -174,7 +179,6 @@ protected:
   std::vector<Probe> special_probes_;
 
 private:
-  std::vector<std::unique_ptr<AttachedProbe>> attached_probes_;
   std::vector<std::unique_ptr<AttachedProbe>> special_attached_probes_;
   void* ksyms_{nullptr};
   std::map<std::string, std::pair<int, void *>> exe_sym_; // exe -> (pid, cache)
@@ -192,8 +196,6 @@ private:
   std::string filename_;
   std::vector<std::string> srclines_;
 
-  std::unique_ptr<AttachedProbe> attach_probe(Probe &probe,
-                                              const BpfOrc &bpforc);
   int setup_perf_events();
   void poll_perf_events(int epollfd, bool drain = false);
   int clear_map(IMap &map);

@@ -1449,7 +1449,7 @@ void CodegenLLVM::visit(Probe &probe)
     {
       if (ap->provider == "watchpoint" && ap->func.size())
       {
-        generateWatchpointSetupProbe(func_type, probe.name(), index);
+        generateWatchpointSetupProbe(func_type, probe.name(), ap->addr, index);
         // Only need one b/c the setup probe can be shared for non-expanded
         // probes
         break;
@@ -1533,7 +1533,8 @@ void CodegenLLVM::visit(Probe &probe)
         b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 
         if (attach_point->provider == "watchpoint" && attach_point->func.size())
-          generateWatchpointSetupProbe(func_type, probefull_, index);
+          generateWatchpointSetupProbe(
+              func_type, probefull_, attach_point->addr, index);
       }
     }
   }
@@ -1936,6 +1937,7 @@ void CodegenLLVM::createFormatStringCall(Call &call, int &id, CallArgs &call_arg
 void CodegenLLVM::generateWatchpointSetupProbe(
     FunctionType *func_type,
     const std::string &expanded_probe_name,
+    int arg_num,
     int index)
 {
   Function *func = Function::Create(func_type,
@@ -1948,10 +1950,42 @@ void CodegenLLVM::generateWatchpointSetupProbe(
   BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
   b_.SetInsertPoint(entry);
 
+  // Send SIGSTOP to curtask
   b_.CreateSignal(b_.getInt32(SIGSTOP));
 
-  // XXX: implement steps 2 & 3
-  // Value *ctx = func->arg_begin();
+  // Pull out function argument
+  Value *ctx = func->arg_begin();
+  int offset = arch::arg_offset(arg_num);
+  Value *addr = b_.CreateLoad(
+      b_.getIntNTy(8 * sizeof(uintptr_t)),
+      b_.CreateGEP(ctx, b_.getInt64(offset * sizeof(uintptr_t))),
+      "arg" + std::to_string(arg_num));
+
+  // Tell userspace to setup the real watchpoint
+  //
+  // Perf ringbuffer entry format:
+  // +----------+----------------+------+
+  // | async_id | watchpoint_idx | addr |
+  // +----------+----------------+------+
+  ArrayType *perfdata_type = ArrayType::get(b_.getInt8Ty(),
+                                            sizeof(uint64_t) * 2 +
+                                                sizeof(uintptr_t));
+  AllocaInst *perfdata = b_.CreateAllocaBPF(perfdata_type, "perfdata");
+  b_.CreateStore(b_.getInt64(asyncactionint(AsyncAction::watchpoint_attach)),
+                 perfdata);
+  b_.CreateStore(b_.getInt64(watchpoint_id_),
+                 b_.CreateGEP(perfdata,
+                              { b_.getInt64(0),
+                                b_.getInt64(sizeof(uint64_t)) }));
+  watchpoint_id_++;
+  b_.CreateStore(addr,
+                 b_.CreateGEP(perfdata,
+                              { b_.getInt64(0),
+                                b_.getInt64(2 * sizeof(uint64_t)) }));
+  b_.CreatePerfEventOutput(ctx,
+                           perfdata,
+                           sizeof(uint64_t) * 2 + sizeof(uintptr_t));
+  b_.CreateLifetimeEnd(perfdata);
 
   b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 }

@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -23,7 +24,6 @@
 #include "bcc_syms.h"
 #include "perf_reader.h"
 
-#include "bpforc.h"
 #include "bpftrace.h"
 #include "attached_probe.h"
 #include "printf.h"
@@ -182,13 +182,12 @@ int BPFtrace::add_probe(ast::Probe &p)
         attach_point->func = func_id;
       }
 
-      if (probetype(attach_point->provider) == ProbeType::watchpoint &&
-          attach_point->func.size())
-      {
+      bool is_watchpoint_probe = probetype(attach_point->provider) ==
+                                     ProbeType::watchpoint &&
+                                 attach_point->func.size();
+      if (is_watchpoint_probe)
         probes_.emplace_back(
             generateWatchpointSetupProbe(func_id, *attach_point, p));
-        continue;
-      }
 
       Probe probe;
       probe.path = attach_point->target;
@@ -207,7 +206,11 @@ int BPFtrace::add_probe(ast::Probe &p)
       probe.addr = attach_point->addr;
       probe.len = attach_point->len;
       probe.mode = attach_point->mode;
-      probes_.push_back(probe);
+
+      if (is_watchpoint_probe)
+        watchpoint_probes_.emplace_back(std::move(probe));
+      else
+        probes_.emplace_back(std::move(probe));
     }
   }
 
@@ -461,6 +464,57 @@ void perf_event_printer(void *cb_cookie, void *data, int size __attribute__((unu
       joined << arg;
     }
     bpftrace->out_->message(MessageType::join, joined.str());
+    return;
+  }
+  else if (printf_id == asyncactionint(AsyncAction::watchpoint_attach))
+  {
+    bool abort = false;
+    uint64_t probe_idx = *reinterpret_cast<uint64_t *>(arg_data +
+                                                       sizeof(uint64_t));
+    uintptr_t addr = *reinterpret_cast<uintptr_t *>(arg_data +
+                                                    2 * sizeof(uint64_t));
+
+    if (probe_idx >= bpftrace->watchpoint_probes_.size())
+    {
+      std::cerr << "Invalid watchpoint probe idx=" << probe_idx << std::endl;
+      abort = true;
+      goto out;
+    }
+
+    // Ignore duplicate watchpoints (idx && addr same), but allow the same
+    // address to be watched by different probes.
+    //
+    // NB: this check works b/c we set Probe::addr below
+    //
+    // TODO: Should we be printing a warning or info message out here?
+    if (bpftrace->watchpoint_probes_[probe_idx].addr == addr)
+      goto out;
+
+    // Attach the real watchpoint probe
+    {
+      Probe &wp_probe = bpftrace->watchpoint_probes_[probe_idx];
+      wp_probe.addr = addr;
+      auto attached = bpftrace->attach_probe(wp_probe, *bpftrace->bpforc_);
+      if (!attached)
+      {
+        std::cerr << "Unable to attach real watchpoint probe" << std::endl;
+        abort = true;
+        goto out;
+      }
+      bpftrace->attached_probes_.emplace_back(std::move(attached));
+    }
+
+  out:
+    // Let the tracee continue
+    if (::kill(bpftrace->pid_, SIGCONT) != 0)
+    {
+      std::cerr << "Failed to SIGCONT tracee: " << strerror(errno) << std::endl;
+      abort = true;
+    }
+
+    if (abort)
+      std::abort();
+
     return;
   }
   else if ( printf_id >= asyncactionint(AsyncAction::syscall) &&
@@ -719,10 +773,12 @@ bool attach_reverse(const Probe &p)
 
 int BPFtrace::run(std::unique_ptr<BpfOrc> bpforc)
 {
+  bpforc_ = std::move(bpforc);
+
   auto r_special_probes = special_probes_.rbegin();
   for (; r_special_probes != special_probes_.rend(); ++r_special_probes)
   {
-    auto attached_probe = attach_probe(*r_special_probes, *bpforc.get());
+    auto attached_probe = attach_probe(*r_special_probes, *bpforc_);
     if (attached_probe == nullptr)
       return -1;
     special_attached_probes_.push_back(std::move(attached_probe));
@@ -757,7 +813,7 @@ int BPFtrace::run(std::unique_ptr<BpfOrc> bpforc)
   for (auto probes = probes_.begin(); probes != probes_.end(); ++probes)
   {
     if (!attach_reverse(*probes)) {
-      auto attached_probe = attach_probe(*probes, *bpforc.get());
+      auto attached_probe = attach_probe(*probes, *bpforc_);
       if (attached_probe == nullptr)
       {
         kill_child();
@@ -770,7 +826,7 @@ int BPFtrace::run(std::unique_ptr<BpfOrc> bpforc)
   for (auto r_probes = probes_.rbegin(); r_probes != probes_.rend(); ++r_probes)
   {
     if (attach_reverse(*r_probes)) {
-      auto attached_probe = attach_probe(*r_probes, *bpforc.get());
+      auto attached_probe = attach_probe(*r_probes, *bpforc_);
       if (attached_probe == nullptr)
       {
         kill_child();

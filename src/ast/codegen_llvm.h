@@ -81,6 +81,7 @@ private:
   // of the "real" probe the setup probe is to be replaced by.
   void generateWatchpointSetupProbe(FunctionType *func_type,
                                     const std::string &expanded_probe_name,
+                                    int arg_num,
                                     int index);
 
   Node *root_;
@@ -104,6 +105,7 @@ private:
   int cat_id_ = 0;
   uint64_t join_id_ = 0;
   int system_id_ = 0;
+  uint64_t watchpoint_id_ = 0;
 };
 
 } // namespace ast

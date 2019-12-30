@@ -169,15 +169,16 @@ const int RESERVED_IDS_PER_ASYNCACTION = 10000;
 
 enum class AsyncAction
 {
-  printf  = 0,     // printf reserves 0-9999 for printf_ids
+  printf = 0,      // printf reserves 0-9999 for printf_ids
   syscall = 10000, // system reserves 10000-19999 for printf_ids
-  cat     = 20000, // cat reserves 20000-29999 for printf_ids
-  exit    = 30000,
+  cat = 20000,     // cat reserves 20000-29999 for printf_ids
+  exit = 30000,
   print,
   clear,
   zero,
   time,
   join,
+  watchpoint_attach,
 };
 
 uint64_t asyncactionint(AsyncAction a);
