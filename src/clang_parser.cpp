@@ -435,9 +435,11 @@ bool ClangParser::parse_btf_definitions(BPFtrace &bpftrace)
   return visit_children(cursor, bpftrace);
 }
 
-bool ClangParser::parse(ast::Program *program, BPFtrace &bpftrace, std::vector<std::string> extra_flags)
+bool ClangParser::parse(ast::Program &program,
+                        BPFtrace &bpftrace,
+                        std::vector<std::string> extra_flags)
 {
-  auto input = program->c_definitions;
+  auto input = program.c_definitions;
 
   // Add BTF definitions, but do not bail out
   // in case of error, just notify

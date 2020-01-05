@@ -12,10 +12,10 @@ namespace bpftrace {
 
 std::set<std::string> TracepointFormatParser::struct_list;
 
-bool TracepointFormatParser::parse(ast::Program *program)
+bool TracepointFormatParser::parse(ast::Program &program)
 {
   std::vector<ast::Probe*> probes_with_tracepoint;
-  for (ast::Probe *probe : *program->probes)
+  for (ast::Probe *probe : *program.probes)
     for (ast::AttachPoint *ap : *probe->attach_points)
       if (ap->provider == "tracepoint") {
         probes_with_tracepoint.push_back(probe);
@@ -26,7 +26,7 @@ bool TracepointFormatParser::parse(ast::Program *program)
     return true;
 
   ast::TracepointArgsVisitor n{};
-  program->c_definitions += "#include <linux/types.h>\n";
+  program.c_definitions += "#include <linux/types.h>\n";
   for (ast::Probe *probe : probes_with_tracepoint)
   {
     n.analyse(probe);
@@ -78,7 +78,8 @@ bool TracepointFormatParser::parse(ast::Program *program)
             std::string struct_name = get_struct_name(category, real_event);
             if (!TracepointFormatParser::struct_list.count(struct_name))
             {
-              program->c_definitions += get_tracepoint_struct(format_file, category, real_event);
+              program.c_definitions +=
+                  get_tracepoint_struct(format_file, category, real_event);
               TracepointFormatParser::struct_list.insert(struct_name);
             }
           }
@@ -103,7 +104,8 @@ bool TracepointFormatParser::parse(ast::Program *program)
           // Check to avoid adding the same struct more than once to definitions
           std::string struct_name = get_struct_name(category, event_name);
           if (TracepointFormatParser::struct_list.insert(struct_name).second)
-            program->c_definitions += get_tracepoint_struct(format_file, category, event_name);
+            program.c_definitions +=
+                get_tracepoint_struct(format_file, category, event_name);
         }
       }
     }

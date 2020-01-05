@@ -22,13 +22,13 @@ using CallArgs = std::vector<std::tuple<std::string, std::vector<Field>>>;
 
 class CodegenLLVM : public Visitor {
 public:
-  explicit CodegenLLVM(Node *root, BPFtrace &bpftrace) :
-    root_(root),
-    module_(std::make_unique<Module>("bpftrace", context_)),
-    b_(context_, *module_.get(), bpftrace),
-    layout_(module_.get()),
-    bpftrace_(bpftrace)
-    { }
+  explicit CodegenLLVM(Node &root, BPFtrace &bpftrace)
+      : root_(root),
+        module_(std::make_unique<Module>("bpftrace", context_)),
+        b_(context_, *module_.get(), bpftrace),
+        layout_(module_.get()),
+        bpftrace_(bpftrace)
+  { }
 
   void visit(Integer &integer) override;
   void visit(PositionalParameter &param) override;
@@ -70,7 +70,7 @@ public:
   std::unique_ptr<BpfOrc> compile(DebugLevel debug=DebugLevel::kNone, std::ostream &out=std::cout);
 
 private:
-  Node *root_;
+  Node &root_;
   LLVMContext context_;
   std::unique_ptr<Module> module_;
   std::unique_ptr<ExecutionEngine> ee_;

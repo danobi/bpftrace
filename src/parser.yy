@@ -28,6 +28,7 @@ class Node;
 
 %{
 #include <iostream>
+#include <memory>
 
 #include "driver.h"
 
@@ -109,25 +110,25 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %token <std::string> STACK_MODE "stack_mode"
 
 %type <std::string> c_definitions
-%type <ast::ProbeList *> probes
-%type <ast::Probe *> probe
-%type <ast::Predicate *> pred
-%type <ast::Ternary *> ternary
-%type <ast::StatementList *> block stmts
-%type <ast::Statement *> block_stmt stmt semicolon_ended_stmt compound_assignment
-%type <ast::Expression *> expr
-%type <ast::Call *> call
-%type <ast::Map *> map
-%type <ast::Variable *> var
-%type <ast::ExpressionList *> vargs
-%type <ast::AttachPointList *> attach_points
-%type <ast::AttachPoint *> attach_point
-%type <ast::PositionalParameter *> param
+%type <std::unique_ptr<ast::ProbeList>> probes
+%type <std::unique_ptr<ast::Probe>> probe
+%type <std::unique_ptr<ast::Predicate>> pred
+%type <std::unique_ptr<ast::Ternary>> ternary
+%type <std::unique_ptr<ast::StatementList>> block stmts
+%type <std::unique_ptr<ast::Statement>> block_stmt stmt semicolon_ended_stmt compound_assignment
+%type <std::unique_ptr<ast::Expression>> expr
+%type <std::unique_ptr<ast::Call>> call
+%type <std::unique_ptr<ast::Map>> map
+%type <std::unique_ptr<ast::Variable>> var
+%type <std::unique_ptr<ast::ExpressionList>> vargs
+%type <std::unique_ptr<ast::AttachPointList>> attach_points
+%type <std::unique_ptr<ast::AttachPoint>> attach_point
+%type <std::unique_ptr<ast::PositionalParameter>> param
 %type <std::string> wildcard
 %type <std::string> ident
-%type <ast::Expression *> map_or_var
-%type <ast::Expression *> pre_post_op
-%type <ast::Integer *> int
+%type <std::unique_ptr<ast::Expression>> map_or_var
+%type <std::unique_ptr<ast::Expression>> pre_post_op
+%type <std::unique_ptr<ast::Integer>> int
 
 %right ASSIGN
 %left QUES COLON
@@ -148,7 +149,7 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 
 %%
 
-program : c_definitions probes { driver.root_ = new ast::Program($1, $2); }
+program : c_definitions probes { driver.root_ = std::make_unique<ast::Program>($1, $2); }
         ;
 
 c_definitions : CPREPROC c_definitions    { $$ = $1 + "\n" + $2; }
@@ -157,29 +158,29 @@ c_definitions : CPREPROC c_definitions    { $$ = $1 + "\n" + $2; }
               |                           { $$ = std::string(); }
               ;
 
-probes : probes probe { $$ = $1; $1->push_back($2); }
-       | probe        { $$ = new ast::ProbeList; $$->push_back($1); }
+probes : probes probe { $$ = std::move($1); $$->push_back(std::move($2)); }
+       | probe        { $$ = std::make_unique<ast::ProbeList>(); $$->push_back(std::move($1)); }
        ;
 
-probe : attach_points pred block { $$ = new ast::Probe($1, $2, $3); }
+probe : attach_points pred block { $$ = std::make_unique<ast::Probe>($1, $2, $3); }
       ;
 
-attach_points : attach_points "," attach_point { $$ = $1; $1->push_back($3); }
-              | attach_point                   { $$ = new ast::AttachPointList; $$->push_back($1); }
+attach_points : attach_points "," attach_point { $$ = std::move($1); $$->push_back($3); }
+              | attach_point                   { $$ = std::make_unique<ast::AttachPointList>(); $$->push_back(std::move($1)); }
               ;
 
-attach_point : ident                            { $$ = new ast::AttachPoint($1, @$); }
-             | ident ":" wildcard               { $$ = new ast::AttachPoint($1, $3, @$); }
-             | ident PATH STRING                { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, false, @$); }
-             | ident PATH wildcard              { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, true, @$); }
-             | ident PATH wildcard PLUS INT     { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, (uint64_t) $5, @$); }
-             | ident PATH STRING PLUS INT       { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, (uint64_t) $5, @$); }
-             | ident PATH INT                   { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, @$); }
-             | ident PATH INT CINT ident        { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, $4, $5, @$); }
-             | ident PATH STRING ":" STRING     { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, $5, false, @$); }
-             | ident PATH STRING ":" wildcard   { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
-             | ident PATH wildcard ":" STRING   { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
-             | ident PATH wildcard ":" wildcard { $$ = new ast::AttachPoint($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
+attach_point : ident                            { $$ = std::make_unique<ast::AttachPoint>($1, @$); }
+             | ident ":" wildcard               { $$ = std::make_unique<ast::AttachPoint>($1, $3, @$); }
+             | ident PATH STRING                { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, false, @$); }
+             | ident PATH wildcard              { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, true, @$); }
+             | ident PATH wildcard PLUS INT     { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, (uint64_t) $5, @$); }
+             | ident PATH STRING PLUS INT       { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, (uint64_t) $5, @$); }
+             | ident PATH INT                   { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, @$); }
+             | ident PATH INT CINT ident        { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, $4, $5, @$); }
+             | ident PATH STRING ":" STRING     { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, $5, false, @$); }
+             | ident PATH STRING ":" wildcard   { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
+             | ident PATH wildcard ":" STRING   { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
+             | ident PATH wildcard ":" wildcard { $$ = std::make_unique<ast::AttachPoint>($1, $2.substr(1, $2.size()-2), $3, $5, true, @$); }
              ;
 
 wildcard : wildcard ident    { $$ = $1 + $2; }
@@ -189,112 +190,112 @@ wildcard : wildcard ident    { $$ = $1 + $2; }
          |                   { $$ = ""; }
          ;
 
-pred : DIV expr ENDPRED { $$ = new ast::Predicate($2, @$); }
+pred : DIV expr ENDPRED { $$ = std::make_unique<ast::Predicate>($2, @$); }
      |                  { $$ = nullptr; }
      ;
 
-ternary : expr QUES expr COLON expr { $$ = new ast::Ternary($1, $3, $5, @$); }
+ternary : expr QUES expr COLON expr { $$ = std::make_unique<ast::Ternary>($1, $3, $5, @$); }
      ;
 
-param : PARAM      { $$ = new ast::PositionalParameter(PositionalParameterType::positional, std::stoll($1.substr(1, $1.size()-1)), @$); }
-      | PARAMCOUNT { $$ = new ast::PositionalParameter(PositionalParameterType::count, 0, @$); }
+param : PARAM      { $$ = std::make_unique<ast::PositionalParameter>(PositionalParameterType::positional, std::stoll($1.substr(1, $1.size()-1)), @$); }
+      | PARAMCOUNT { $$ = std::make_unique<ast::PositionalParameter>(PositionalParameterType::count, 0, @$); }
       ;
 
-block : "{" stmts "}"     { $$ = $2; }
+block : "{" stmts "}"     { $$ = std::move($2); }
       ;
 
-semicolon_ended_stmt: stmt ";"  { $$ = $1; }
+semicolon_ended_stmt: stmt ";"  { $$ = std::move($1); }
                     ;
 
-stmts : semicolon_ended_stmt stmts { $$ = $2; $2->insert($2->begin(), $1); }
-      | block_stmt stmts           { $$ = $2; $2->insert($2->begin(), $1); }
-      | stmt                       { $$ = new ast::StatementList; $$->push_back($1); }
-      |                            { $$ = new ast::StatementList; }
+stmts : semicolon_ended_stmt stmts { $$ = std::move($2); $$->insert($$->begin(), $1); }
+      | block_stmt stmts           { $$ = std::move($2); $$->insert($$->begin(), $1); }
+      | stmt                       { $$ = std::make_unique<ast::StatementList>(); $$->push_back($1); }
+      |                            { $$ = std::make_unique<ast::StatementList>(); }
       ;
 
-block_stmt : IF "(" expr ")" block  { $$ = new ast::If($3, $5); }
-           | IF "(" expr ")" block ELSE block { $$ = new ast::If($3, $5, $7); }
-           | UNROLL "(" INT ")" block { $$ = new ast::Unroll($3, $5); }
+block_stmt : IF "(" expr ")" block  { $$ = std::make_unique<ast::If>($3, $5); }
+           | IF "(" expr ")" block ELSE block { $$ = std::make_unique<ast::If>($3, $5, $7); }
+           | UNROLL "(" INT ")" block { $$ = std::make_unique<ast::Unroll>($3, $5); }
            ;
 
-stmt : expr                { $$ = new ast::ExprStatement($1); }
-     | compound_assignment { $$ = $1; }
-     | map "=" expr        { $$ = new ast::AssignMapStatement($1, $3, @2); }
-     | var "=" expr        { $$ = new ast::AssignVarStatement($1, $3, @2); }
+stmt : expr                { $$ = std::make_unique<ast::ExprStatement>($1); }
+     | compound_assignment { $$ = std::move($1); }
+     | map "=" expr        { $$ = std::make_unique<ast::AssignMapStatement>($1, $3, @2); }
+     | var "=" expr        { $$ = std::make_unique<ast::AssignVarStatement>($1, $3, @2); }
      ;
 
-compound_assignment : map LEFTASSIGN expr  { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::LEFT,  $3, @2)); }
-                    | var LEFTASSIGN expr  { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::LEFT,  $3, @2)); }
-                    | map RIGHTASSIGN expr { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::RIGHT, $3, @2)); }
-                    | var RIGHTASSIGN expr { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::RIGHT, $3, @2)); }
-                    | map PLUSASSIGN expr  { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::PLUS,  $3, @2)); }
-                    | var PLUSASSIGN expr  { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::PLUS,  $3, @2)); }
-                    | map MINUSASSIGN expr { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::MINUS, $3, @2)); }
-                    | var MINUSASSIGN expr { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::MINUS, $3, @2)); }
-                    | map MULASSIGN expr   { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::MUL,   $3, @2)); }
-                    | var MULASSIGN expr   { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::MUL,   $3, @2)); }
-                    | map DIVASSIGN expr   { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::DIV,   $3, @2)); }
-                    | var DIVASSIGN expr   { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::DIV,   $3, @2)); }
-                    | map MODASSIGN expr   { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::MOD,   $3, @2)); }
-                    | var MODASSIGN expr   { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::MOD,   $3, @2)); }
-                    | map BANDASSIGN expr  { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::BAND,  $3, @2)); }
-                    | var BANDASSIGN expr  { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::BAND,  $3, @2)); }
-                    | map BORASSIGN expr   { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::BOR,   $3, @2)); }
-                    | var BORASSIGN expr   { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::BOR,   $3, @2)); }
-                    | map BXORASSIGN expr  { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::BXOR,  $3, @2)); }
-                    | var BXORASSIGN expr  { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::BXOR,  $3, @2)); }
+compound_assignment : map LEFTASSIGN expr  { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::LEFT,  $3, @2)); }
+                    | var LEFTASSIGN expr  { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::LEFT,  $3, @2)); }
+                    | map RIGHTASSIGN expr { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::RIGHT, $3, @2)); }
+                    | var RIGHTASSIGN expr { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::RIGHT, $3, @2)); }
+                    | map PLUSASSIGN expr  { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::PLUS,  $3, @2)); }
+                    | var PLUSASSIGN expr  { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::PLUS,  $3, @2)); }
+                    | map MINUSASSIGN expr { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::MINUS, $3, @2)); }
+                    | var MINUSASSIGN expr { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::MINUS, $3, @2)); }
+                    | map MULASSIGN expr   { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::MUL,   $3, @2)); }
+                    | var MULASSIGN expr   { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::MUL,   $3, @2)); }
+                    | map DIVASSIGN expr   { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::DIV,   $3, @2)); }
+                    | var DIVASSIGN expr   { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::DIV,   $3, @2)); }
+                    | map MODASSIGN expr   { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::MOD,   $3, @2)); }
+                    | var MODASSIGN expr   { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::MOD,   $3, @2)); }
+                    | map BANDASSIGN expr  { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::BAND,  $3, @2)); }
+                    | var BANDASSIGN expr  { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::BAND,  $3, @2)); }
+                    | map BORASSIGN expr   { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::BOR,   $3, @2)); }
+                    | var BORASSIGN expr   { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::BOR,   $3, @2)); }
+                    | map BXORASSIGN expr  { $$ = std::make_unique<ast::AssignMapStatement>($1, std::make_unique<ast::Binop>($1, token::BXOR,  $3, @2)); }
+                    | var BXORASSIGN expr  { $$ = std::make_unique<ast::AssignVarStatement>($1, std::make_unique<ast::Binop>($1, token::BXOR,  $3, @2)); }
                     ;
 
-int : MINUS INT    { $$ = new ast::Integer(-1 * $2, @$); }
-    | INT          { $$ = new ast::Integer($1, @$); }
+int : MINUS INT    { $$ = std::make_unique<ast::Integer>(-1 * $2, @$); }
+    | INT          { $$ = std::make_unique<ast::Integer>($1, @$); }
     ;
 
-expr : int                                      { $$ = $1; }
-     | STRING                                   { $$ = new ast::String($1, @$); }
-     | BUILTIN                                  { $$ = new ast::Builtin($1, @$); }
-     | CALL_BUILTIN                             { $$ = new ast::Builtin($1, @$); }
-     | IDENT                                    { $$ = new ast::Identifier($1, @$); }
-     | STACK_MODE                               { $$ = new ast::StackMode($1, @$); }
-     | ternary                                  { $$ = $1; }
-     | param                                    { $$ = $1; }
-     | map_or_var                               { $$ = $1; }
-     | call                                     { $$ = $1; }
-     | "(" expr ")"                             { $$ = $2; }
-     | expr EQ expr                             { $$ = new ast::Binop($1, token::EQ, $3, @2); }
-     | expr NE expr                             { $$ = new ast::Binop($1, token::NE, $3, @2); }
-     | expr LE expr                             { $$ = new ast::Binop($1, token::LE, $3, @2); }
-     | expr GE expr                             { $$ = new ast::Binop($1, token::GE, $3, @2); }
-     | expr LT expr                             { $$ = new ast::Binop($1, token::LT, $3, @2); }
-     | expr GT expr                             { $$ = new ast::Binop($1, token::GT, $3, @2); }
-     | expr LAND expr                           { $$ = new ast::Binop($1, token::LAND,  $3, @2); }
-     | expr LOR expr                            { $$ = new ast::Binop($1, token::LOR,   $3, @2); }
-     | expr LEFT expr                           { $$ = new ast::Binop($1, token::LEFT,  $3, @2); }
-     | expr RIGHT expr                          { $$ = new ast::Binop($1, token::RIGHT, $3, @2); }
-     | expr PLUS expr                           { $$ = new ast::Binop($1, token::PLUS,  $3, @2); }
-     | expr MINUS expr                          { $$ = new ast::Binop($1, token::MINUS, $3, @2); }
-     | expr MUL expr                            { $$ = new ast::Binop($1, token::MUL,   $3, @2); }
-     | expr DIV expr                            { $$ = new ast::Binop($1, token::DIV,   $3, @2); }
-     | expr MOD expr                            { $$ = new ast::Binop($1, token::MOD,   $3, @2); }
-     | expr BAND expr                           { $$ = new ast::Binop($1, token::BAND,  $3, @2); }
-     | expr BOR expr                            { $$ = new ast::Binop($1, token::BOR,   $3, @2); }
-     | expr BXOR expr                           { $$ = new ast::Binop($1, token::BXOR,  $3, @2); }
-     | LNOT expr                                { $$ = new ast::Unop(token::LNOT, $2, @1); }
-     | BNOT expr                                { $$ = new ast::Unop(token::BNOT, $2, @1); }
-     | MINUS expr                               { $$ = new ast::Unop(token::MINUS, $2, @1); }
-     | MUL  expr %prec DEREF                    { $$ = new ast::Unop(token::MUL,  $2, @1); }
-     | expr DOT ident                           { $$ = new ast::FieldAccess($1, $3, @2); }
-     | expr PTR ident                           { $$ = new ast::FieldAccess(new ast::Unop(token::MUL, $1, @2), $3, @$); }
-     | expr "[" expr "]"                        { $$ = new ast::ArrayAccess($1, $3, @2 + @4); }
-     | "(" IDENT ")" expr %prec CAST            { $$ = new ast::Cast($2, false, $4, @1 + @3); }
-     | "(" IDENT MUL ")" expr %prec CAST        { $$ = new ast::Cast($2, true, $5, @1 + @4); }
-     | pre_post_op                              { $$ = $1; }
+expr : int                                      { $$ = std::move($1); }
+     | STRING                                   { $$ = std::make_unique<ast::String>($1, @$); }
+     | BUILTIN                                  { $$ = std::make_unique<ast::Builtin>($1, @$); }
+     | CALL_BUILTIN                             { $$ = std::make_unique<ast::Builtin>($1, @$); }
+     | IDENT                                    { $$ = std::make_unique<ast::Identifier>($1, @$); }
+     | STACK_MODE                               { $$ = std::make_unique<ast::StackMode>($1, @$); }
+     | ternary                                  { $$ = std::move($1); }
+     | param                                    { $$ = std::move($1); }
+     | map_or_var                               { $$ = std::move($1); }
+     | call                                     { $$ = std::move($1); }
+     | "(" expr ")"                             { $$ = std::move($2); }
+     | expr EQ expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::EQ, std::move($3), @2); }
+     | expr NE expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::NE, std::move($3), @2); }
+     | expr LE expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::LE, std::move($3), @2); }
+     | expr GE expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::GE, std::move($3), @2); }
+     | expr LT expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::LT, std::move($3), @2); }
+     | expr GT expr                             { $$ = std::make_unique<ast::Binop>(std::move($1), token::GT, std::move($3), @2); }
+     | expr LAND expr                           { $$ = std::make_unique<ast::Binop>(std::move($1), token::LAND,  std::move($3), @2); }
+     | expr LOR expr                            { $$ = std::make_unique<ast::Binop>(std::move($1), token::LOR,   std::move($3), @2); }
+     | expr LEFT expr                           { $$ = std::make_unique<ast::Binop>(std::move($1), token::LEFT,  std::move($3), @2); }
+     | expr RIGHT expr                          { $$ = std::make_unique<ast::Binop>(std::move($1), token::RIGHT, std::move($3), @2); }
+     | expr PLUS expr                           { $$ = std::make_unique<ast::Binop>(std::move($1), token::PLUS,  std::move($3), @2); }
+     | expr MINUS expr                          { $$ = std::make_unique<ast::Binop>(std::move($1), token::MINUS, std::move($3), @2); }
+     | expr MUL expr                            { $$ = std::make_unique<ast::Binop>(std::move($1), token::MUL,   std::move($3), @2); }
+     | expr DIV expr                            { $$ = std::make_unique<ast::Binop>(std::move($1), token::DIV,   std::move($3), @2); }
+     | expr MOD expr                            { $$ = std::make_unique<ast::Binop>(std::move($1), token::MOD,   std::move($3), @2); }
+     | expr BAND expr                           { $$ = std::make_unique<ast::Binop>(std::move($1), token::BAND,  std::move($3), @2); }
+     | expr BOR expr                            { $$ = std::make_unique<ast::Binop>(std::move($1), token::BOR,   std::move($3), @2); }
+     | expr BXOR expr                           { $$ = std::make_unique<ast::Binop>(std::move($1), token::BXOR,  std::move($3), @2); }
+     | LNOT expr                                { $$ = std::make_unique<ast::Unop>(token::LNOT, std::move($2), @1); }
+     | BNOT expr                                { $$ = std::make_unique<ast::Unop>(token::BNOT, std::move($2), @1); }
+     | MINUS expr                               { $$ = std::make_unique<ast::Unop>(token::MINUS, std::move($2), @1); }
+     | MUL  expr %prec DEREF                    { $$ = std::make_unique<ast::Unop>(token::MUL,  std::move($2), @1); }
+     | expr DOT ident                           { $$ = std::make_unique<ast::FieldAccess>(std::move($1), $3, @2); }
+     | expr PTR ident                           { $$ = std::make_unique<ast::FieldAccess>(std::make_unique<ast::Unop>(token::MUL, std::move($1), @2), $3, @$); }
+     | expr "[" expr "]"                        { $$ = std::make_unique<ast::ArrayAccess>(std::move($1), std::move($3), @2 + @4); }
+     | "(" IDENT ")" expr %prec CAST            { $$ = std::make_unique<ast::Cast>($2, false, std::move($4), @1 + @3); }
+     | "(" IDENT MUL ")" expr %prec CAST        { $$ = std::make_unique<ast::Cast>($2, true, std::move($5), @1 + @4); }
+     | pre_post_op                              { $$ = std::move($1); }
      ;
 
 
-pre_post_op : map_or_var INCREMENT   { $$ = new ast::Unop(token::INCREMENT, $1, true, @2); }
-            | map_or_var DECREMENT   { $$ = new ast::Unop(token::DECREMENT, $1, true, @2); }
-            | INCREMENT map_or_var   { $$ = new ast::Unop(token::INCREMENT, $2, @1); }
-            | DECREMENT map_or_var   { $$ = new ast::Unop(token::DECREMENT, $2, @1); }
+pre_post_op : map_or_var INCREMENT   { $$ = std::make_unique<ast::Unop>(token::INCREMENT, $1, true, @2); }
+            | map_or_var DECREMENT   { $$ = std::make_unique<ast::Unop>(token::DECREMENT, $1, true, @2); }
+            | INCREMENT map_or_var   { $$ = std::make_unique<ast::Unop>(token::INCREMENT, $2, @1); }
+            | DECREMENT map_or_var   { $$ = std::make_unique<ast::Unop>(token::DECREMENT, $2, @1); }
             | ident INCREMENT      { error(@1, "The ++ operator must be applied to a map or variable"); YYERROR; }
             | INCREMENT ident      { error(@1, "The ++ operator must be applied to a map or variable"); YYERROR; }
             | ident DECREMENT      { error(@1, "The -- operator must be applied to a map or variable"); YYERROR; }
@@ -308,10 +309,10 @@ ident : IDENT         { $$ = $1; }
       | STACK_MODE    { $$ = $1; }
       ;
 
-call : CALL "(" ")"                 { $$ = new ast::Call($1, @$); }
-     | CALL "(" vargs ")"           { $$ = new ast::Call($1, $3, @$); }
-     | CALL_BUILTIN  "(" ")"        { $$ = new ast::Call($1, @$); }
-     | CALL_BUILTIN "(" vargs ")"   { $$ = new ast::Call($1, $3, @$); }
+call : CALL "(" ")"                 { $$ = std::make_unique<ast::Call>($1, @$); }
+     | CALL "(" vargs ")"           { $$ = std::make_unique<ast::Call>($1, $3, @$); }
+     | CALL_BUILTIN  "(" ")"        { $$ = std::make_unique<ast::Call>($1, @$); }
+     | CALL_BUILTIN "(" vargs ")"   { $$ = std::make_unique<ast::Call>($1, $3, @$); }
      | IDENT "(" ")"                { error(@1, "Unknown function: " + $1); YYERROR;  }
      | IDENT "(" vargs ")"          { error(@1, "Unknown function: " + $1); YYERROR;  }
      | BUILTIN "(" ")"              { error(@1, "Unknown function: " + $1); YYERROR;  }
@@ -320,19 +321,19 @@ call : CALL "(" ")"                 { $$ = new ast::Call($1, @$); }
      | STACK_MODE "(" vargs ")"     { error(@1, "Unknown function: " + $1); YYERROR;  }
      ;
 
-map : MAP               { $$ = new ast::Map($1, @$); }
-    | MAP "[" vargs "]" { $$ = new ast::Map($1, $3, @$); }
+map : MAP               { $$ = std::make_unique<ast::Map>($1, @$); }
+    | MAP "[" vargs "]" { $$ = std::make_unique<ast::Map>($1, $3, @$); }
     ;
 
-var : VAR { $$ = new ast::Variable($1, @$); }
+var : VAR { $$ = std::make_unique<ast::Variable>($1, @$); }
     ;
 
-map_or_var : var { $$ = $1; }
-           | map { $$ = $1; }
+map_or_var : var { $$ = std::move($1); }
+           | map { $$ = std::move($1); }
            ;
 
-vargs : vargs "," expr { $$ = $1; $1->push_back($3); }
-      | expr           { $$ = new ast::ExpressionList; $$->push_back($1); }
+vargs : vargs "," expr { $$ = std::move($1); $$->push_back($3); }
+      | expr           { $$ = std::make_unique<ast::ExpressionList>(); $$->push_back(std::move($1)); }
       ;
 
 %%

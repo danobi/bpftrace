@@ -1864,7 +1864,7 @@ std::unique_ptr<BpfOrc> CodegenLLVM::compile(DebugLevel debug, std::ostream &out
 {
   createLog2Function();
   createLinearFunction();
-  root_->accept(*this);
+  root_.accept(*this);
 
   LLVMInitializeBPFTargetInfo();
   LLVMInitializeBPFTarget();

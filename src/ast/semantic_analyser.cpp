@@ -1528,7 +1528,7 @@ int SemanticAnalyser::analyse()
   std::string errors;
 
   for (pass_ = 1; pass_ <= num_passes_; pass_++) {
-    root_->accept(*this);
+    root_.accept(*this);
     errors = err_.str();
     if (!errors.empty()) {
       out_ << errors;

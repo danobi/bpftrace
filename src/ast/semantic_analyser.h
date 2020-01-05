@@ -14,11 +14,11 @@ namespace ast {
 
 class SemanticAnalyser : public Visitor {
 public:
-  explicit SemanticAnalyser(Node *root, BPFtrace &bpftrace, std::ostream &out = std::cerr)
-    : root_(root),
-      bpftrace_(bpftrace),
-      out_(out)
-      { }
+  explicit SemanticAnalyser(Node &root,
+                            BPFtrace &bpftrace,
+                            std::ostream &out = std::cerr)
+      : root_(root), bpftrace_(bpftrace), out_(out)
+  { }
 
   void visit(Integer &integer) override;
   void visit(PositionalParameter &param) override;
@@ -49,7 +49,7 @@ public:
   int create_maps(bool debug=false);
 
 private:
-  Node *root_;
+  Node &root_;
   BPFtrace &bpftrace_;
   std::ostream &out_;
   std::ostringstream err_;

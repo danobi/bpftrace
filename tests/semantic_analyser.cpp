@@ -25,11 +25,11 @@ void test_for_warning(
   ASSERT_EQ(driver.parse_str(input), 0);
 
   ClangParser clang;
-  clang.parse(driver.root_, bpftrace);
+  clang.parse(*driver.root_, bpftrace);
 
   ASSERT_EQ(driver.parse_str(input), 0);
   std::stringstream out;
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace, out);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace, out);
   semantics.analyse();
   if (invert)
     EXPECT_THAT(out.str(), Not(HasSubstr(warning)));
@@ -59,11 +59,11 @@ void test(
   ASSERT_EQ(driver.parse_str(input), 0);
 
   ClangParser clang;
-  clang.parse(driver.root_, bpftrace);
+  clang.parse(*driver.root_, bpftrace);
 
   ASSERT_EQ(driver.parse_str(input), 0);
   std::stringstream out;
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace, out);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace, out);
   std::stringstream msg;
   msg << "\nInput:\n" << input << "\n\nOutput:\n";
   EXPECT_EQ(expected_result, semantics.analyse()) << msg.str() + out.str();

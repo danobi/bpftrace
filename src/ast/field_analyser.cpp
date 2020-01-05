@@ -168,7 +168,7 @@ void FieldAnalyser::visit(Program &program)
 int FieldAnalyser::analyse()
 {
   if (bpftrace_.btf_.has_data())
-    root_->accept(*this);
+    root_.accept(*this);
   return 0;
 }
 

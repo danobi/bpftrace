@@ -35,8 +35,10 @@ public:
   bool is_map = false;
   Expression() : Node(){};
   Expression(location loc) : Node(loc){};
+  // NB: do not free any of the non-owned pointers we store
+  virtual ~Expression() = default;
 };
-using ExpressionList = std::vector<Expression *>;
+using ExpressionList = std::vector<std::unique_ptr<Expression>>;
 
 class Integer : public Expression {
 public:
@@ -100,10 +102,17 @@ class Call : public Expression {
 public:
   explicit Call(std::string &func) : func(is_deprecated(func)), vargs(nullptr) { }
   explicit Call(std::string &func, location loc) : Expression(loc), func(is_deprecated(func)), vargs(nullptr) { }
-  Call(std::string &func, ExpressionList *vargs) : func(is_deprecated(func)), vargs(vargs) { }
-  Call(std::string &func, ExpressionList *vargs, location loc) : Expression(loc), func(is_deprecated(func)), vargs(vargs) { }
+  Call(std::string &func, std::unique_ptr<ExpressionList> vargs)
+      : func(is_deprecated(func)), vargs(std::move(vargs))
+  {
+  }
+  Call(std::string &func, std::unique_ptr<ExpressionList> vargs, location loc)
+      : Expression(loc), func(is_deprecated(func)), vargs(std::move(vargs))
+  {
+  }
+  ~Call() = default;
   std::string func;
-  ExpressionList *vargs;
+  std::unique_ptr<ExpressionList> vargs;
 
   void accept(Visitor &v) override;
 };
@@ -111,17 +120,23 @@ public:
 class Map : public Expression {
 public:
   explicit Map(std::string &ident, location loc) : Expression(loc), ident(ident), vargs(nullptr) { is_map = true; }
-  Map(std::string &ident, ExpressionList *vargs) : ident(ident), vargs(vargs) { is_map = true; }
-  Map(std::string &ident, ExpressionList *vargs, location loc) : Expression(loc), ident(ident), vargs(vargs)
+  Map(std::string &ident, std::unique_ptr<ExpressionList> vargs)
+      : ident(ident), vargs(std::move(vargs))
   {
     is_map = true;
-    for (auto expr : *vargs)
+  }
+  Map(std::string &ident, std::unique_ptr<ExpressionList> vargs, location loc)
+      : Expression(loc), ident(ident), vargs(std::move(vargs))
+  {
+    is_map = true;
+    for (auto &expr : *vargs)
     {
       expr->key_for_map = this;
     }
   }
+  ~Map() = default;
   std::string ident;
-  ExpressionList *vargs;
+  std::unique_ptr<ExpressionList> vargs;
   bool skip_key_validation = false;
 
   void accept(Visitor &v) override;
@@ -138,9 +153,16 @@ public:
 
 class Binop : public Expression {
 public:
-  Binop(Expression *left, int op, Expression *right, location loc)
-      : Expression(loc), left(left), right(right), op(op) {}
-  Expression *left, *right;
+  Binop(std::unique_ptr<Expression> left,
+        int op,
+        std::unique_ptr<Expression> right,
+        location loc)
+      : Expression(loc), left(std::move(left)), right(std::move(right)), op(op)
+  {
+  }
+  ~Binop() = default;
+  std::unique_ptr<Expression> left;
+  std::unique_ptr<Expression> right;
   int op;
 
   void accept(Visitor &v) override;
@@ -148,11 +170,19 @@ public:
 
 class Unop : public Expression {
 public:
- Unop(int op, Expression *expr, location loc = location())
-   : Expression(loc), expr(expr), op(op), is_post_op(false) { }
-  Unop(int op, Expression *expr, bool is_post_op = false, location loc = location())
-    : Expression(loc), expr(expr), op(op), is_post_op(is_post_op) { }
-  Expression *expr;
+  Unop(int op, std::unique_ptr<Expression> expr, location loc = location())
+      : Expression(loc), expr(std::move(expr)), op(op), is_post_op(false)
+  {
+  }
+  Unop(int op,
+       std::unique_ptr<Expression> expr,
+       bool is_post_op = false,
+       location loc = location())
+      : Expression(loc), expr(std::move(expr)), op(op), is_post_op(is_post_op)
+  {
+  }
+  ~Unop() = default;
+  std::unique_ptr<Expression> expr;
   int op;
   bool is_post_op;
 
@@ -161,9 +191,18 @@ public:
 
 class FieldAccess : public Expression {
 public:
-  FieldAccess(Expression *expr, const std::string &field) : expr(expr), field(field) { }
-  FieldAccess(Expression *expr, const std::string &field, location loc) : Expression(loc), expr(expr), field(field) { }
-  Expression *expr;
+  FieldAccess(std::unique_ptr<Expression> expr, const std::string &field)
+      : expr(std::move(expr)), field(field)
+  {
+  }
+  FieldAccess(std::unique_ptr<Expression> expr,
+              const std::string &field,
+              location loc)
+      : Expression(loc), expr(std::move(expr)), field(field)
+  {
+  }
+  ~FieldAccess() = default;
+  std::unique_ptr<Expression> expr;
   std::string field;
 
   void accept(Visitor &v) override;
@@ -171,23 +210,45 @@ public:
 
 class ArrayAccess : public Expression {
 public:
-  ArrayAccess(Expression *expr, Expression* indexpr) : expr(expr), indexpr(indexpr) { }
-  ArrayAccess(Expression *expr, Expression* indexpr, location loc) : Expression(loc), expr(expr), indexpr(indexpr) { }
-  Expression *expr;
-  Expression *indexpr;
+  ArrayAccess(std::unique_ptr<Expression> expr,
+              std::unique_ptr<Expression> indexpr)
+      : expr(std::move(expr)), indexpr(std::move(indexpr))
+  {
+  }
+  ArrayAccess(std::unique_ptr<Expression> expr,
+              std::unique_ptr<Expression> indexpr,
+              location loc)
+      : Expression(loc), expr(std::move(expr)), indexpr(std::move(indexpr))
+  {
+  }
+  ~ArrayAccess() = default;
+  std::unique_ptr<Expression> expr;
+  std::unique_ptr<Expression> indexpr;
 
   void accept(Visitor &v) override;
 };
 
 class Cast : public Expression {
 public:
-  Cast(const std::string &type, bool is_pointer, Expression *expr)
-    : cast_type(type), is_pointer(is_pointer), expr(expr) { }
-  Cast(const std::string &type, bool is_pointer, Expression *expr, location loc)
-    : Expression(loc), cast_type(type), is_pointer(is_pointer), expr(expr) { }
+  Cast(const std::string &type,
+       bool is_pointer,
+       std::unique_ptr<Expression> expr)
+      : cast_type(type), is_pointer(is_pointer), expr(std::move(expr))
+  {
+  }
+  Cast(const std::string &type,
+       bool is_pointer,
+       std::unique_ptr<Expression> expr,
+       location loc)
+      : Expression(loc),
+        cast_type(type),
+        is_pointer(is_pointer),
+        expr(std::move(expr))
+  {
+  }
   std::string cast_type;
   bool is_pointer;
-  Expression *expr;
+  std::unique_ptr<Expression> expr;
 
   void accept(Visitor &v) override;
 };
@@ -197,79 +258,133 @@ public:
   Statement() {}
   Statement(location loc) : Node(loc) {}
 };
-using StatementList = std::vector<Statement *>;
+using StatementList = std::vector<std::unique_ptr<Statement>>;
 
 class ExprStatement : public Statement {
 public:
-  explicit ExprStatement(Expression *expr) : expr(expr) { }
-  explicit ExprStatement(Expression *expr, location loc) : Statement(loc), expr(expr) { }
-  Expression *expr;
+  explicit ExprStatement(std::unique_ptr<Expression> expr)
+      : expr(std::move(expr))
+  {
+  }
+  explicit ExprStatement(std::unique_ptr<Expression> expr, location loc)
+      : Statement(loc), expr(std::move(expr))
+  {
+  }
+  ~ExprStatement() = default;
+  std::unique_ptr<Expression> expr;
 
   void accept(Visitor &v) override;
 };
 
 class AssignMapStatement : public Statement {
 public:
- AssignMapStatement(Map *map, Expression *expr, location loc = location()) : Statement(loc), map(map), expr(expr) {
-    expr->map = map;
+  AssignMapStatement(std::unique_ptr<Map> map,
+                     std::unique_ptr<Expression> expr,
+                     location loc = location())
+      : Statement(loc), map(std::move(map)), expr(std::move(expr))
+  {
+    expr->map = map.get();
   };
-  Map *map;
-  Expression *expr;
+  ~AssignMapStatement() = default;
+  std::unique_ptr<Map> map;
+  std::unique_ptr<Expression> expr;
 
   void accept(Visitor &v) override;
 };
 
 class AssignVarStatement : public Statement {
 public:
-  AssignVarStatement(Variable *var, Expression *expr) : var(var), expr(expr) {
-    expr->var = var;
+  AssignVarStatement(std::unique_ptr<Variable> var, std::unique_ptr<Expression> expr)
+      : var(std::move(var)), expr(std::move(expr))
+  {
+    expr->var = var.get();
   }
-  AssignVarStatement(Variable *var, Expression *expr, location loc)
-    : Statement(loc), var(var), expr(expr) { expr->var = var; }
-  Variable *var;
-  Expression *expr;
+  AssignVarStatement(std::unique_ptr<Variable> var,
+                     std::unique_ptr<Expression> expr,
+                     location loc)
+      : Statement(loc), var(std::move(var)), expr(std::move(expr))
+  {
+    expr->var = var.get();
+  }
+  ~AssignVarStatement() = default;
+  std::unique_ptr<Variable> var;
+  std::unique_ptr<Expression> expr;
 
   void accept(Visitor &v) override;
 };
 
 class If : public Statement {
 public:
-  If(Expression *cond, StatementList *stmts) : cond(cond), stmts(stmts) { }
-  If(Expression *cond, StatementList *stmts, StatementList *else_stmts)
-    : cond(cond), stmts(stmts), else_stmts(else_stmts) { }
-  Expression *cond;
-  StatementList *stmts = nullptr;
-  StatementList *else_stmts = nullptr;
+  If(std::unique_ptr<Expression> cond, std::unique_ptr<StatementList> stmts)
+      : cond(std::move(cond)), stmts(std::move(stmts))
+  {
+  }
+  If(std::unique_ptr<Expression> cond,
+     std::unique_ptr<StatementList> stmts,
+     std::unique_ptr<StatementList> else_stmts)
+      : cond(std::move(cond)),
+        stmts(std::move(stmts)),
+        else_stmts(std::move(else_stmts))
+  {
+  }
+  ~If() = default;
+  std::unique_ptr<Expression> cond;
+  std::unique_ptr<StatementList> stmts;
+  std::unique_ptr<StatementList> else_stmts;
 
   void accept(Visitor &v) override;
 };
 
 class Unroll : public Statement {
 public:
-  Unroll(long int var, StatementList *stmts) : var(var), stmts(stmts) {}
-
+  Unroll(long int var, std::unique_ptr<StatementList> stmts)
+      : var(var), stmts(std::move(stmts))
+  {
+  }
+  ~Unroll() = default;
   long int var = 0;
-  StatementList *stmts;
+  std::unique_ptr<StatementList> stmts;
 
   void accept(Visitor &v) override;
 };
 
 class Predicate : public Node {
 public:
-  explicit Predicate(Expression *expr) : expr(expr) { }
-  explicit Predicate(Expression *expr, location loc) : Node(loc), expr(expr) { }
-  Expression *expr;
+  explicit Predicate(std::unique_ptr<Expression> expr) : expr(std::move(expr))
+  {
+  }
+  explicit Predicate(std::unique_ptr<Expression> expr, location loc)
+      : Node(loc), expr(std::move(expr))
+  {
+  }
+  ~Predicate() = default;
+  std::unique_ptr<Expression> expr;
 
   void accept(Visitor &v) override;
 };
 
 class Ternary : public Expression {
 public:
-  Ternary(Expression *cond, Expression *left, Expression *right)
-    : cond(cond), left(left), right(right) { }
-  Ternary(Expression *cond, Expression *left, Expression *right, location loc)
-    : Expression(loc), cond(cond), left(left), right(right) { }
-  Expression *cond, *left, *right;
+  Ternary(std::unique_ptr<Expression> cond,
+          std::unique_ptr<Expression> left,
+          std::unique_ptr<Expression> right)
+      : cond(std::move(cond)), left(std::move(left)), right(std::move(right))
+  {
+  }
+  Ternary(std::unique_ptr<Expression> cond,
+          std::unique_ptr<Expression> left,
+          std::unique_ptr<Expression> right,
+          location loc)
+      : Expression(loc),
+        cond(std::move(cond)),
+        left(std::move(left)),
+        right(std::move(right))
+  {
+  }
+  ~Ternary();
+  std::unique_ptr<Expression> cond;
+  std::unique_ptr<Expression> left;
+  std::unique_ptr<Expression> right;
 
   void accept(Visitor &v) override;
 };
@@ -341,16 +456,23 @@ public:
 private:
   std::map<std::string, int> index_;
 };
-using AttachPointList = std::vector<AttachPoint *>;
+using AttachPointList = std::vector<std::unique_ptr<AttachPoint>>;
 
 class Probe : public Node {
 public:
-  Probe(AttachPointList *attach_points, Predicate *pred, StatementList *stmts)
-    : attach_points(attach_points), pred(pred), stmts(stmts) { }
+  Probe(std::unique_ptr<AttachPointList> attach_points,
+        std::unique_ptr<Predicate> pred,
+        std::unique_ptr<StatementList> stmts)
+      : attach_points(std::move(attach_points)),
+        pred(std::move(pred)),
+        stmts(std::move(stmts))
+  {
+  }
+  ~Probe() = default;
 
-  AttachPointList *attach_points;
-  Predicate *pred;
-  StatementList *stmts;
+  std::unique_ptr<AttachPointList> attach_points;
+  std::unique_ptr<Predicate> pred;
+  std::unique_ptr<StatementList> stmts;
 
   void accept(Visitor &v) override;
   std::string name() const;
@@ -362,14 +484,17 @@ public:
 private:
   int index_ = 0;
 };
-using ProbeList = std::vector<Probe *>;
+using ProbeList = std::vector<std::unique_ptr<Probe>>;
 
 class Program : public Node {
 public:
-  Program(const std::string &c_definitions, ProbeList *probes)
-    : c_definitions(c_definitions), probes(probes) { }
+  Program(const std::string &c_definitions, std::unique_ptr<ProbeList> probes)
+      : c_definitions(c_definitions), probes(std::move(probes))
+  {
+  }
+  ~Program() = default;
   std::string c_definitions;
-  ProbeList *probes;
+  std::unique_ptr<ProbeList> probes;
 
   void accept(Visitor &v) override;
 };

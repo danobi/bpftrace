@@ -10,8 +10,8 @@ namespace ast {
 
 class FieldAnalyser : public Visitor {
 public:
-  explicit FieldAnalyser(Node *root, BPFtrace &bpftrace)
-    : type_(""), root_(root), bpftrace_(bpftrace)
+  explicit FieldAnalyser(Node &root, BPFtrace &bpftrace)
+      : type_(""), root_(root), bpftrace_(bpftrace)
   { }
 
   void visit(Integer &integer) override;
@@ -43,7 +43,7 @@ public:
 
 private:
   std::string    type_;
-  Node          *root_;
+  Node &root_;
   BPFtrace      &bpftrace_;
 };
 

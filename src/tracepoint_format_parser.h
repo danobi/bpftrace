@@ -119,7 +119,7 @@ private:
 class TracepointFormatParser
 {
 public:
-  static bool parse(ast::Program *program);
+  static bool parse(ast::Program &program);
   static std::string get_struct_name(const std::string &category, const std::string &event_name);
 
 private:

@@ -26,13 +26,13 @@ void gen_bytecode(const std::string &input, std::stringstream &out)
   ASSERT_EQ(driver.parse_str(input), 0);
 
   ClangParser clang;
-  clang.parse(driver.root_, *bpftrace);
+  clang.parse(*driver.root_, *bpftrace);
 
-  ast::SemanticAnalyser semantics(driver.root_, *bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, *bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
   ASSERT_EQ(semantics.create_maps(true), 0);
 
-  ast::CodegenLLVM codegen(driver.root_, *bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, *bpftrace);
   codegen.compile(DebugLevel::kDebug, out);
 }
 

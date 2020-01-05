@@ -27,10 +27,10 @@ TEST(codegen, populate_sections)
   Driver driver(bpftrace);
 
   ASSERT_EQ(driver.parse_str("kprobe:foo { 1 } kprobe:bar { 1 }"), 0);
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
   std::stringstream out;
-  ast::CodegenLLVM codegen(driver.root_, bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, bpftrace);
   auto bpforc = codegen.compile();
 
   // Check sections are populated
@@ -47,12 +47,12 @@ TEST(codegen, printf_offsets)
   // TODO (mmarchini): also test printf with a string argument
   ASSERT_EQ(driver.parse_str("struct Foo { char c; int i; } kprobe:f { $foo = (struct Foo*)0; printf(\"%c %u\\n\", $foo->c, $foo->i) }"), 0);
   ClangParser clang;
-  clang.parse(driver.root_, bpftrace);
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace);
+  clang.parse(*driver.root_, bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
   ASSERT_EQ(semantics.create_maps(true), 0);
   std::stringstream out;
-  ast::CodegenLLVM codegen(driver.root_, bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, bpftrace);
   auto bpforc = codegen.compile();
 
   EXPECT_EQ(bpftrace.printf_args_.size(), 1U);
@@ -82,9 +82,9 @@ TEST(codegen, probe_count)
   Driver driver(bpftrace);
 
   ASSERT_EQ(driver.parse_str("kprobe:f { 1; } kprobe:d { 1; }"), 0);
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
-  ast::CodegenLLVM codegen(driver.root_, bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, bpftrace);
   codegen.compile();
 }
 } // namespace codegen

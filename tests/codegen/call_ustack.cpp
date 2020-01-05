@@ -74,13 +74,13 @@ TEST(codegen, call_ustack_mapids)
   ASSERT_EQ(driver.parse_str("kprobe:f { @x = ustack(5); @y = ustack(6); @z = ustack(6) }"), 0);
 
   ClangParser clang;
-  clang.parse(driver.root_, bpftrace);
+  clang.parse(*driver.root_, bpftrace);
 
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
   ASSERT_EQ(semantics.create_maps(true), 0);
 
-  ast::CodegenLLVM codegen(driver.root_, bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, bpftrace);
   codegen.compile();
 
   ASSERT_EQ(FakeMap::next_mapfd_, 7);
@@ -102,13 +102,13 @@ TEST(codegen, call_ustack_modes_mapids)
   ASSERT_EQ(driver.parse_str("kprobe:f { @x = ustack(perf); @y = ustack(bpftrace); @z = ustack() }"), 0);
 
   ClangParser clang;
-  clang.parse(driver.root_, bpftrace);
+  clang.parse(*driver.root_, bpftrace);
 
-  ast::SemanticAnalyser semantics(driver.root_, bpftrace);
+  ast::SemanticAnalyser semantics(*driver.root_, bpftrace);
   ASSERT_EQ(semantics.analyse(), 0);
   ASSERT_EQ(semantics.create_maps(true), 0);
 
-  ast::CodegenLLVM codegen(driver.root_, bpftrace);
+  ast::CodegenLLVM codegen(*driver.root_, bpftrace);
   codegen.compile();
 
   ASSERT_EQ(FakeMap::next_mapfd_, 7);
