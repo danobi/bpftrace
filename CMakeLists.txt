@@ -54,9 +54,15 @@ include_directories(SYSTEM ${LIBELF_INCLUDE_DIRS})
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 bison_target(bison_parser src/parser.yy ${CMAKE_BINARY_DIR}/parser.tab.cc VERBOSE)
+add_custom_target(
+  patch_bison_for_unique_ptr_support
+  sed -i "s/return \*new \(yyas_<T> \(\)\) T \(t\)/return *new (yyas_<T> ()) T (std::move((T&)t))/g" ${BISON_bison_parser_OUTPUT_HEADER}
+  DEPENDS ${BISON_bison_parser_OUTPUT_HEADER}
+)
 flex_target(flex_lexer src/lexer.l ${CMAKE_BINARY_DIR}/lex.yy.cc)
 add_flex_bison_dependency(flex_lexer bison_parser)
 add_library(parser ${BISON_bison_parser_OUTPUTS} ${FLEX_flex_lexer_OUTPUTS})
+add_dependencies(parser patch_bison_for_unique_ptr_support)
 target_compile_options(parser PRIVATE "-w")
 target_include_directories(parser PUBLIC src src/ast ${CMAKE_BINARY_DIR})
 
