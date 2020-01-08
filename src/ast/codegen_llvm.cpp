@@ -1016,6 +1016,25 @@ void CodegenLLVM::visit(Call &call)
     auto arg = call.vargs->at(0);
     auto scoped_del = accept(arg);
   }
+  else if (call.func == "unwatch")
+  {
+    Expression *addr = call.vargs->at(0);
+    addr->accept(*this);
+
+    auto elements = AsyncEvent::WatchpointUnwatch().asLLVMType(b_);
+    StructType *unwatch_struct = b_.GetStructType("unwatch_t", elements, true);
+    AllocaInst *buf = b_.CreateAllocaBPF(unwatch_struct, "unwatch");
+    size_t struct_size = layout_.getTypeAllocSize(unwatch_struct);
+
+    b_.CreateStore(b_.getInt64(asyncactionint(AsyncAction::watchpoint_detach)),
+                   b_.CreateGEP(buf, { b_.getInt64(0), b_.getInt32(0) }));
+    b_.CreateStore(
+        b_.CreateIntCast(expr_, b_.getInt64Ty(), false /* unsigned */),
+        b_.CreateGEP(buf, { b_.getInt64(0), b_.getInt32(1) }));
+    b_.CreatePerfEventOutput(ctx_, buf, struct_size);
+    b_.CreateLifetimeEnd(buf);
+    expr_ = nullptr;
+  }
   else
   {
     LOG(FATAL) << "missing codegen for function \"" << call.func << "\"";

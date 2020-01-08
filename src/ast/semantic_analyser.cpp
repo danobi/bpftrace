@@ -1187,6 +1187,14 @@ void SemanticAnalyser::visit(Call &call)
     call.type = call.vargs->front()->type;
     call.type.SetAS(as);
   }
+  else if (call.func == "unwatch")
+  {
+    if (check_nargs(call, 1))
+      check_arg(call, Type::integer, 0);
+
+    // Return type cannot be used
+    call.type = SizedType(Type::none, 0);
+  }
   else
   {
     LOG(ERROR, call.loc, err_) << "Unknown function: '" << call.func << "'";
