@@ -798,6 +798,33 @@ void CodegenLLVM::visit(Call &call)
         b_.CreateLifetimeEnd(right_string);
     }
   }
+  else if (call.func == "unwatch")
+  {
+    Expression *addr = call.vargs->at(0);
+    addr->accept(*this);
+
+    // Perf ringbuffer entry format:
+    // +----------+------+
+    // | async_id | addr |
+    // +----------+------+
+    ArrayType *perfdata_type = ArrayType::get(b_.getInt8Ty(),
+                                              sizeof(uint64_t) +
+                                                  sizeof(uintptr_t));
+    AllocaInst *perfdata = b_.CreateAllocaBPF(perfdata_type, "perfdata");
+    b_.CreateStore(b_.getInt64(asyncactionint(AsyncAction::watchpoint_detach)),
+                   perfdata);
+    b_.CreateStore(b_.CreateIntCast(expr_,
+                                    b_.getIntNTy(8 * sizeof(uintptr_t)),
+                                    false /* unsigned */),
+                   b_.CreateGEP(perfdata,
+                                { b_.getInt64(0),
+                                  b_.getInt64(sizeof(uint64_t)) }));
+    b_.CreatePerfEventOutput(ctx_,
+                             perfdata,
+                             sizeof(uint64_t) + sizeof(uintptr_t));
+    b_.CreateLifetimeEnd(perfdata);
+    expr_ = nullptr;
+  }
   else
   {
     std::cerr << "missing codegen for function \"" << call.func << "\"" << std::endl;

@@ -492,15 +492,30 @@ void perf_event_printer(void *cb_cookie, void *data, int size __attribute__((unu
 
     // Attach the real watchpoint probe
     {
+      bool registers_available = true;
       Probe &wp_probe = bpftrace->watchpoint_probes_[probe_idx];
       wp_probe.addr = addr;
-      auto attached = bpftrace->attach_probe(wp_probe, *bpftrace->bpforc_);
-      if (!attached)
+      std::unique_ptr<AttachedProbe> attached;
+      try
+      {
+        attached = bpftrace->attach_probe(wp_probe, *bpftrace->bpforc_);
+      }
+      catch (const EnospcException &ex)
+      {
+        registers_available = false;
+        bpftrace->out_->message(MessageType::lost_events,
+                                "Failed to attach watchpoint probe. You are "
+                                "out of watchpoint registers.");
+        goto out;
+      }
+
+      if (!attached && registers_available)
       {
         std::cerr << "Unable to attach real watchpoint probe" << std::endl;
         abort = true;
         goto out;
       }
+
       bpftrace->attached_probes_.emplace_back(std::move(attached));
     }
 
@@ -514,6 +529,25 @@ void perf_event_printer(void *cb_cookie, void *data, int size __attribute__((unu
 
     if (abort)
       std::abort();
+
+    return;
+  }
+  else if (printf_id == asyncactionint(AsyncAction::watchpoint_detach))
+  {
+    uintptr_t addr = *reinterpret_cast<uintptr_t *>(arg_data +
+                                                    sizeof(uint64_t));
+
+    // Remove all probes watching `addr`. Note how we fail silently here
+    // (ie invalid addr). This lets script writers be a bit more aggressive
+    // when unwatch'ing addresses, especially if they're sampling a portion
+    // of addresses they're interested in watching.
+    bpftrace->attached_probes_.erase(
+        std::remove_if(bpftrace->attached_probes_.begin(),
+                       bpftrace->attached_probes_.end(),
+                       [&](const auto &ap) {
+                         return ap->probe().addr == addr;
+                       }),
+        bpftrace->attached_probes_.end());
 
     return;
   }
@@ -742,7 +776,12 @@ std::unique_ptr<AttachedProbe> BPFtrace::attach_probe(Probe &probe, const BpfOrc
     else
       return std::make_unique<AttachedProbe>(probe, func->second, safe_mode_);
   }
-  catch (std::runtime_error &e)
+  catch (const EnospcException &e)
+  {
+    // Caller will handle
+    throw e;
+  }
+  catch (const std::runtime_error &e)
   {
     std::cerr << e.what() << std::endl;
   }

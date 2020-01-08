@@ -733,6 +733,14 @@ void SemanticAnalyser::visit(Call &call)
     }
     call.type = SizedType(Type::integer, 8);
   }
+  else if (call.func == "unwatch")
+  {
+    if (check_nargs(call, 1))
+      check_arg(call, Type::integer, 0);
+
+    // Return type cannot be used
+    call.type = SizedType(Type::none, 0);
+  }
   else {
     error("Unknown function: '" + call.func + "'", call.loc);
     call.type = SizedType(Type::none, 0);

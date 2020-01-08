@@ -179,6 +179,7 @@ enum class AsyncAction
   time,
   join,
   watchpoint_attach,
+  watchpoint_detach,
 };
 
 uint64_t asyncactionint(AsyncAction a);

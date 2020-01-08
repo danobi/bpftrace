@@ -1,27 +1,31 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <cstring>
 #include <elf.h>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <link.h>
-#include <linux/perf_event.h>
-#include <linux/hw_breakpoint.h>
 #include <regex>
 #include <sys/auxv.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
 #include <sys/utsname.h>
 #include <tuple>
 #include <unistd.h>
 
 #include "attached_probe.h"
-#include "bpftrace.h"
-#include "utils.h"
+#include "bcc_elf.h"
 #include "bcc_syms.h"
 #include "bcc_usdt.h"
-#include "bcc_elf.h"
-#include "libbpf.h"
-#include "utils.h"
-#include "list.h"
+#include "bpftrace.h"
 #include "disasm.h"
+#include "libbpf.h"
+#include "list.h"
+#include "utils.h"
+#include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
 #include <linux/version.h>
 
@@ -841,9 +845,28 @@ void AttachedProbe::attach_watchpoint(int pid, const std::string& mode)
   // Generate a notification every 1 event; we care about every event
   attr.sample_period = 1;
 
-  int perf_event_fd = bpf_attach_perf_event_raw(progfd_, &attr, pid, -1, -1, 0);
+  // We copy paste the code from bcc's bpf_attach_perf_event_raw here
+  // because we need to know the exact error codes (and also we don't
+  // want bcc's noisy error messages).
+  int perf_event_fd = syscall(
+      __NR_perf_event_open, &attr, pid, -1, -1, PERF_FLAG_FD_CLOEXEC);
   if (perf_event_fd < 0)
+  {
+    if (errno == ENOSPC)
+      throw EnospcException("No more HW registers left");
+    else
+      throw std::runtime_error("Error attaching probe: " + probe_.name);
+  }
+  if (ioctl(perf_event_fd, PERF_EVENT_IOC_SET_BPF, progfd_) != 0)
+  {
+    close(perf_event_fd);
     throw std::runtime_error("Error attaching probe: " + probe_.name);
+  }
+  if (ioctl(perf_event_fd, PERF_EVENT_IOC_ENABLE, 0) != 0)
+  {
+    close(perf_event_fd);
+    throw std::runtime_error("Error attaching probe: " + probe_.name);
+  }
 
   perf_event_fds_.push_back(perf_event_fd);
 }
