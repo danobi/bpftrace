@@ -307,12 +307,20 @@ public:
       freq = val;
   }
   AttachPoint(const std::string &provider,
-              const std::string &target,
+              const std::string &func,
               uint64_t addr,
               uint64_t len,
               const std::string &mode,
-              location loc=location())
-    : Node(loc), provider(probetypeName(provider)), target(target), addr(addr), len(len), mode(mode) { }
+              location loc = location())
+      : Node(loc),
+        provider(probetypeName(provider)),
+        func(func),
+        addr(addr),
+        len(len),
+        mode(mode),
+        need_expansion(true)
+  {
+  }
   AttachPoint(const std::string &provider,
               const std::string &target,
               const std::string &func,
