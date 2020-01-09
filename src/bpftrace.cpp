@@ -1720,6 +1720,37 @@ uint64_t BPFtrace::max_value(const std::vector<uint8_t> &value, int nvalues)
   return max;
 }
 
+std::optional<std::string> BPFtrace::get_watchpoint_binary_path() const
+{
+  if (child_)
+  {
+    auto args = split_string(cmd_, ' ', /* remove_empty= */ true);
+    if (args.empty())
+      throw std::runtime_error("-c CMD is invalid: " + cmd_);
+
+    auto paths = resolve_binary_path(args[0]);
+    switch (paths.size())
+    {
+      case 0:
+        throw std::runtime_error("path '" + args[0] +
+                                 "' does not exist or is not executable");
+      case 1:
+        return paths.front();
+      default:
+        throw std::runtime_error(
+            "path '" + args[0] +
+            "' must refer to a unique binary but matched " +
+            std::to_string(paths.size()) + " binaries");
+    }
+  }
+  else if (pid())
+    return "/proc/" + std::to_string(pid()) + "/exe";
+  else
+  {
+    return std::nullopt;
+  }
+}
+
 int64_t BPFtrace::min_value(const std::vector<uint8_t> &value, int nvalues)
 {
   int64_t val, max = 0, retval;
