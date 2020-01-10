@@ -107,12 +107,7 @@ Probe BPFtrace::generateWatchpointSetupProbe(const std::string &func,
   Probe setup_probe;
   setup_probe.name = get_watchpoint_setup_probe_name(ap.name(func));
   setup_probe.type = ProbeType::uprobe;
-  if (has_child_cmd())
-    setup_probe.path = cmd_;
-  else if (pid_)
-    setup_probe.path = "/proc/" + std::to_string(pid_) + "/exe";
-  else
-    throw std::runtime_error("-p PID or -c CND required for watchpoint");
+  setup_probe.path = get_watchpoint_binary_path();
   setup_probe.attach_point = func;
   setup_probe.orig_name = get_watchpoint_setup_probe_name(probe.name());
   setup_probe.index = ap.index(func) > 0 ? ap.index(func) : probe.index();
@@ -239,6 +234,13 @@ std::set<std::string> BPFtrace::find_wildcard_matches(
     {
       symbol_stream = std::make_unique<std::istringstream>(
           extract_func_symbols_from_path(attach_point.target));
+      prefix = "";
+      func = attach_point.func;
+      break;
+    }
+    case ProbeType::watchpoint: {
+      symbol_stream = std::make_unique<std::istringstream>(
+          extract_func_symbols_from_path(get_watchpoint_binary_path()));
       prefix = "";
       func = attach_point.func;
       break;
@@ -1532,6 +1534,16 @@ uint64_t BPFtrace::max_value(const std::vector<uint8_t> &value, int nvalues)
       max = val;
   }
   return max;
+}
+
+std::string BPFtrace::get_watchpoint_binary_path() const
+{
+  if (has_child_cmd())
+    return cmd_;
+  else if (pid_)
+    return "/proc/" + std::to_string(pid_) + "/exe";
+  else
+    throw std::runtime_error("-p PID or -c CND required for watchpoint");
 }
 
 int64_t BPFtrace::min_value(const std::vector<uint8_t> &value, int nvalues)

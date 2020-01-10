@@ -112,7 +112,10 @@ public:
   void error(std::ostream &out, const location &l, const std::string &m);
   void warning(std::ostream &out, const location &l, const std::string &m);
   void log_with_location(std::string, std::ostream &, const location &, const std::string &);
-  bool has_child_cmd() { return cmd_.size() != 0; }
+  bool has_child_cmd() const
+  {
+    return cmd_.size() != 0;
+  }
   virtual pid_t child_pid() { return child_pid_; };
   int spawn_child();
   void kill_child();
@@ -211,6 +214,7 @@ private:
                   int step) const;
   template <typename T>
   static T reduce_value(const std::vector<uint8_t> &value, int nvalues);
+  std::string get_watchpoint_binary_path() const;
   static int64_t min_value(const std::vector<uint8_t> &value, int nvalues);
   static uint64_t max_value(const std::vector<uint8_t> &value, int nvalues);
   static uint64_t read_address_from_output(std::string output);
