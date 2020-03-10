@@ -9,57 +9,6 @@
 
 #include "types.h"
 
-namespace {
-
-/*
- * This function splits an attach point definition into arguments,
- * where arguments are separated by `:`. The exception is `:`s inside
- * of quoted strings, which we must treat as a literal.
- *
- * Note that this function assumes the raw string is generally well
- * formed. More specifically, that there is no unescaped whitespace
- * and no unmatched quotes.
- */
-std::vector<std::string> split_attachpoint(const std::string &raw,
-                                           bool remove_empty = false)
-{
-  std::vector<std::string> ret;
-  bool in_quotes = false;
-  std::string argument;
-
-  for (size_t idx = 0; idx < raw.size(); ++idx)
-  {
-    if (raw[idx] == ':' && !in_quotes)
-    {
-      if (argument.empty() && remove_empty)
-        continue;
-
-      ret.emplace_back(std::move(argument));
-      // The standard says an std::string in moved-from state is in
-      // valid but unspecified state, so clear() to be safe
-      argument.clear();
-    }
-    else if (raw[idx] == '"')
-      in_quotes = !in_quotes;
-    // Handle escaped characters in a string
-    else if (in_quotes && raw[idx] == '\\' && (idx + 1 < raw.size()))
-    {
-      argument += raw[idx + 1];
-      ++idx;
-    }
-    else
-      argument += raw[idx];
-  }
-
-  // Always drop final element if it's empty
-  if (argument.size())
-    ret.emplace_back(std::move(argument));
-
-  return ret;
-}
-
-} // namespace
-
 namespace bpftrace {
 namespace ast {
 
@@ -96,8 +45,8 @@ int AttachPointParser::parse_attachpoint(AttachPoint &ap)
 {
   ap_ = &ap;
 
-  parts_ = split_attachpoint(ap_->raw_input, true);
-  if (parts_.empty())
+  parts_.clear();
+  if (split_attachpoint(parts_, ap_->raw_input, true) || parts_.empty())
   {
     errs_ << "Invalid attachpoint definition" << std::endl;
     return 1;
@@ -133,6 +82,54 @@ int AttachPointParser::parse_attachpoint(AttachPoint &ap)
       errs_ << "Unrecognized probe type: " << ap_->provider << std::endl;
       return 1;
   }
+
+  return 0;
+}
+
+int AttachPointParser::split_attachpoint(std::vector<std::string> &out,
+                                         const std::string &raw,
+                                         bool remove_empty)
+{
+  bool in_quotes = false;
+  std::string argument;
+
+  for (size_t idx = 0; idx < raw.size(); ++idx)
+  {
+    if (raw[idx] == ':' && !in_quotes)
+    {
+      if (argument.empty() && remove_empty)
+        continue;
+
+      out.emplace_back(std::move(argument));
+      // The standard says an std::string in moved-from state is in
+      // valid but unspecified state, so clear() to be safe
+      argument.clear();
+    }
+    else if (raw[idx] == '"')
+    {
+      // Only allow mixing non-quoted and quoted text if quoted text is at
+      // end of arg
+      if (argument.size() && !in_quotes)
+      {
+        errs_ << "Mixing quoted and unquoted text is not allowed" << std::endl;
+        return 1;
+      }
+
+      in_quotes = !in_quotes;
+    }
+    // Handle escaped characters in a string
+    else if (in_quotes && raw[idx] == '\\' && (idx + 1 < raw.size()))
+    {
+      argument += raw[idx + 1];
+      ++idx;
+    }
+    else
+      argument += raw[idx];
+  }
+
+  // Always drop final element if it's empty
+  if (argument.size())
+    out.emplace_back(std::move(argument));
 
   return 0;
 }
@@ -316,7 +313,9 @@ int AttachPointParser::uretprobe_parser()
 int AttachPointParser::usdt_parser()
 {
   // Allow empty fields
-  parts_ = split_attachpoint(ap_->raw_input, false);
+  parts_.clear();
+  if (split_attachpoint(parts_, ap_->raw_input, false))
+    return 1;
 
   if (parts_.size() != 3 && parts_.size() != 4)
   {
@@ -498,7 +497,9 @@ int AttachPointParser::hardware_parser()
 int AttachPointParser::watchpoint_parser()
 {
   // Allow empty fields
-  parts_ = split_attachpoint(ap_->raw_input, false);
+  parts_.clear();
+  if (split_attachpoint(parts_, ap_->raw_input, false))
+    return 1;
 
   if (parts_.size() != 5)
   {
