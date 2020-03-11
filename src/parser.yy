@@ -114,7 +114,7 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %type <ast::Probe *> probe
 %type <ast::Predicate *> pred
 %type <ast::Ternary *> ternary
-%type <ast::StatementList *> block stmts
+%type <ast::StatementList *> probe_body block stmts
 %type <ast::Statement *> block_stmt stmt semicolon_ended_stmt compound_assignment
 %type <ast::Expression *> expr
 %type <ast::Call *> call
@@ -162,7 +162,7 @@ probes : probes probe { $$ = $1; $1->push_back($2); }
        | probe        { $$ = new ast::ProbeList; $$->push_back($1); }
        ;
 
-probe : attach_points pred block { $$ = new ast::Probe($1, $2, $3); }
+probe : attach_points pred probe_body { $$ = new ast::Probe($1, $2, $3); }
       ;
 
 attach_points : attach_points "," attach_point { $$ = $1; $1->push_back($3); }
@@ -192,6 +192,9 @@ pred : DIV expr ENDPRED { $$ = new ast::Predicate($2, @$); }
      |                  { $$ = nullptr; }
      ;
 
+probe_body : "{" stmts "}"     { $$ = $2; }
+     ;
+
 ternary : expr QUES expr COLON expr { $$ = new ast::Ternary($1, $3, $5, @$); }
      ;
 
@@ -200,6 +203,7 @@ param : PARAM      { $$ = new ast::PositionalParameter(PositionalParameterType::
       ;
 
 block : "{" stmts "}"     { $$ = $2; }
+      | block_stmt        { $$ = new ast::StatementList; $$->emplace_back($1); }
       ;
 
 semicolon_ended_stmt: stmt ";"  { $$ = $1; }
