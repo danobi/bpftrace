@@ -115,7 +115,7 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %type <ast::Predicate *> pred
 %type <ast::Ternary *> ternary
 %type <ast::StatementList *> block stmts
-%type <ast::Statement *> block_stmt stmt semicolon_ended_stmt compound_assignment
+%type <ast::Statement *> stmt iter_stmt select_stmt expr_stmt compound_assignment
 %type <ast::Expression *> expr
 %type <ast::Call *> call
 %type <ast::Map *> map
@@ -202,25 +202,29 @@ param : PARAM      { $$ = new ast::PositionalParameter(PositionalParameterType::
 block : "{" stmts "}"     { $$ = $2; }
       ;
 
-semicolon_ended_stmt: stmt ";"  { $$ = $1; }
-                    ;
-
-stmts : semicolon_ended_stmt stmts { $$ = $2; $2->insert($2->begin(), $1); }
-      | block_stmt stmts           { $$ = $2; $2->insert($2->begin(), $1); }
+stmts : block                      { $$ = $1; }
       | stmt                       { $$ = new ast::StatementList; $$->push_back($1); }
       |                            { $$ = new ast::StatementList; }
       ;
 
-block_stmt : IF "(" expr ")" block  { $$ = new ast::If($3, $5); }
-           | IF "(" expr ")" block ELSE block { $$ = new ast::If($3, $5, $7); }
-           | UNROLL "(" INT ")" block { $$ = new ast::Unroll($3, $5); }
-           ;
-
 stmt : expr                { $$ = new ast::ExprStatement($1); }
      | compound_assignment { $$ = $1; }
+     | expr_stmt           { $$ = $1; }
+     | select_stmt         { $$ = $1; }
+     | iter_stmt           { $$ = $1; }
      | map "=" expr        { $$ = new ast::AssignMapStatement($1, $3, @2); }
      | var "=" expr        { $$ = new ast::AssignVarStatement($1, $3, @2); }
      ;
+
+expr_stmt : stmt ";"  { $$ = $1; }
+          ;
+
+select_stmt : IF "(" expr ")" stmts            { $$ = new ast::If($3, $5); }
+            | IF "(" expr ")" stmts ELSE stmts { $$ = new ast::If($3, $5, $7); }
+            ;
+
+iter_stmt : UNROLL "(" INT ")" stmts           { $$ = new ast::Unroll($3, $5); }
+          ;
 
 compound_assignment : map LEFTASSIGN expr  { $$ = new ast::AssignMapStatement($1, new ast::Binop($1, token::LEFT,  $3, @2)); }
                     | var LEFTASSIGN expr  { $$ = new ast::AssignVarStatement($1, new ast::Binop($1, token::LEFT,  $3, @2)); }
