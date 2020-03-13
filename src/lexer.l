@@ -4,6 +4,7 @@
 %option stack
 %{
 #include <climits>
+#include <cstdint>
 #include "driver.h"
 #include "utils.h"
 #include "parser.tab.hh"
@@ -11,8 +12,17 @@
 bpftrace::location loc;
 static std::string struct_type;
 static std::string buffer;
+static std::string ap_defn;
+static int32_t unmatched_braces = 0;
+static bool ap_defn_seen_string = false;
 
 #define YY_USER_ACTION loc.columns(yyleng);
+#define YY_USER_INIT {                                      \
+                        yy_push_state(AP_DEFN, yyscanner);  \
+                        ap_defn.clear();                    \
+                        unmatched_braces = 0;               \
+                        ap_defn_seen_string = false;        \
+                      }
 #define yyterminate() return bpftrace::Parser::make_END(loc)
 
 using namespace bpftrace;
@@ -38,12 +48,12 @@ call_and_builtin kstack|ustack
 %x ENUM
 %x BRACE
 %x COMMENT
+%x AP_DEFN
 
 %%
 
 {hspace}+               { loc.step(); }
 {vspace}+               { loc.lines(yyleng); loc.step(); }
-
 ^"#!".*$                // executable line
 "//".*$                 // single-line comments
 "/*"                    yy_push_state(COMMENT, yyscanner);
@@ -64,8 +74,27 @@ bpftrace|perf           { return Parser::make_STACK_MODE(yytext, loc); }
 {var}                   { return Parser::make_VAR(yytext, loc); }
 ":"                     { return Parser::make_COLON(loc); }
 ";"                     { return Parser::make_SEMI(loc); }
-"{"                     { return Parser::make_LBRACE(loc); }
-"}"                     { return Parser::make_RBRACE(loc); }
+"{"                     {
+                          ++unmatched_braces;
+                          return Parser::make_LBRACE(loc);
+                        }
+"}"                     {
+                          // We kept track of open braces to avoid switching
+                          // lexer states if braces were used in action body.
+                          // If open brace count is 0, that means we're done
+                          // with the action block. Actual unmatched brace
+                          // errors will happen in the parser so we don't need
+                          // to try and do error recovery here.
+                          --unmatched_braces;
+                          if (unmatched_braces == 0)
+                          {
+                            ap_defn.clear();
+                            ap_defn_seen_string = false;
+                            yy_push_state(AP_DEFN, yyscanner);
+                          }
+
+                          return Parser::make_RBRACE(loc);
+                        }
 "["                     { return Parser::make_LBRACKET(loc); }
 "]"                     { return Parser::make_RBRACKET(loc); }
 "("                     { return Parser::make_LPAREN(loc); }
@@ -137,6 +166,41 @@ bpftrace|perf           { return Parser::make_STACK_MODE(yytext, loc); }
   \\.                   { driver.error(loc, std::string("invalid escape character '") +
                                             yytext + "'"); }
   .                     driver.error(loc, "invalid character"); yy_pop_state(yyscanner);
+}
+
+<AP_DEFN>{
+  \"                    {
+                          yy_push_state(STR, yyscanner);
+                          buffer.clear();
+                          ap_defn_seen_string = true;
+                        }
+  {space}*/\/\*         { yy_push_state(COMMENT, yyscanner); }
+  struct|union|enum     { yy_push_state(STRUCT, yyscanner); buffer.clear(); struct_type = yytext; }
+  [_a-zA-Z0-9]+         { ap_defn += yytext; }
+  {path}                { ap_defn += yytext; }
+  ":"                   { ap_defn += ":"; }
+  "."                   { ap_defn += "."; }
+  "+"                   { ap_defn += "+"; }
+  "*"                   { ap_defn += "*"; }
+  "["                   { ap_defn += "["; }
+  "]"                   { ap_defn += "]"; }
+  {space}               { // Ignore preceeding whitespace
+                          if (ap_defn.size() || ap_defn_seen_string)
+                          {
+                            driver.error(loc, "invalid whitespace in attachpoint definition");
+                            yy_pop_state(yyscanner);
+                          }
+                        }
+  {space}*/[\{\/]       { // Ignore trailing whitespace. We know it's trailing because
+                          // of the trailing context matching either "/" or "{", signaling
+                          // the start of predicate and action, respectively.
+                          yy_pop_state(yyscanner);
+                          return Parser::make_AP_DEFN_IDENT(ap_defn, loc);
+                        }
+  .                     {
+                          driver.error(loc, "invalid character");
+                          yy_pop_state(yyscanner);
+                        }
 }
 
 struct|union|enum       yy_push_state(STRUCT, yyscanner); buffer.clear(); struct_type = yytext;

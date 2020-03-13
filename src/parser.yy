@@ -108,6 +108,7 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %token <std::string> PARAM "positional parameter"
 %token <long> INT "integer"
 %token <std::string> STACK_MODE "stack_mode"
+%token <std::string> AP_DEFN_IDENT "attachpoint definition"
 
 %type <std::string> c_definitions
 %type <ast::ProbeList *> probes
@@ -172,20 +173,12 @@ attach_points : attach_points "," attach_point { $$ = $1; $1->push_back($3); }
 attach_point : attach_point_def                { $$ = new ast::AttachPoint($1, @$); }
              ;
 
-attach_point_def : attach_point_def ident    { $$ = $1 + $2; }
+attach_point_def : attach_point_def AP_DEFN_IDENT    { $$ = $1 + $2; }
                  // Since we're double quoting the STRING for the benefit of the
                  // AttachPointParser, we have to make sure we re-escape any double
                  // quotes.
-                 | attach_point_def STRING   { $$ = $1 + "\"" + std::regex_replace($2, std::regex("\""), "\\\"") + "\""; }
-                 | attach_point_def PATH     { $$ = $1 + $2; }
-                 | attach_point_def INT      { $$ = $1 + std::to_string($2); }
-                 | attach_point_def COLON    { $$ = $1 + ":"; }
-                 | attach_point_def DOT      { $$ = $1 + "."; }
-                 | attach_point_def PLUS     { $$ = $1 + "+"; }
-                 | attach_point_def MUL      { $$ = $1 + "*"; }
-                 | attach_point_def LBRACKET { $$ = $1 + "["; }
-                 | attach_point_def RBRACKET { $$ = $1 + "]"; }
-                 |                           { $$ = ""; }
+                 | attach_point_def STRING           { $$ = $1 + "\"" + std::regex_replace($2, std::regex("\""), "\\\"") + "\""; }
+                 |                                   { $$ = ""; }
                  ;
 
 pred : DIV expr ENDPRED { $$ = new ast::Predicate($2, @$); }
