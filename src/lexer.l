@@ -1,9 +1,11 @@
-%option yylineno nodefault noyywrap noinput
+%option yylineno nodefault noyywrap
 %option never-interactive
 %option reentrant
 %option stack
 %{
 #include <climits>
+#include <cctype>
+#include <cstdint>
 #include "driver.h"
 #include "utils.h"
 #include "parser.tab.hh"
@@ -16,6 +18,17 @@ static std::string buffer;
 #define yyterminate() return bpftrace::Parser::make_END(loc)
 
 using namespace bpftrace;
+
+namespace {
+enum class LexState {
+  PROBE,
+  PREDICATE,
+  ACTIONS,
+};
+
+LexState state = LexState::PROBE;
+int32_t open_braces = 0;
+} // namespace
 %}
 
 ident   [_a-zA-Z][_a-zA-Z0-9]*
@@ -41,8 +54,26 @@ call_and_builtin kstack|ustack
 
 %%
 
-{hspace}+               { loc.step(); }
-{vspace}+               { loc.lines(yyleng); loc.step(); }
+{hspace}+               {
+                          if (state == LexState::PROBE)
+                          {
+                            char c = yyinput(yyscanner);
+                            unput(c);
+                            if (c != '{' && c != '/')
+                              driver.error(loc, "whitespace in probe definition");
+                          }
+                          loc.step();
+                        }
+{vspace}+               {
+                          if (state == LexState::PROBE)
+                          {
+                            char c = yyinput(yyscanner);
+                            unput(c);
+                            if (c != '{' && c != '/')
+                              driver.error(loc, "whitespace in probe definition");
+                          }
+                          loc.lines(yyleng); loc.step();
+                        }
 
 ^"#!".*$                // executable line
 "//".*$                 // single-line comments
@@ -64,13 +95,46 @@ bpftrace|perf           { return Parser::make_STACK_MODE(yytext, loc); }
 {var}                   { return Parser::make_VAR(yytext, loc); }
 ":"                     { return Parser::make_COLON(loc); }
 ";"                     { return Parser::make_SEMI(loc); }
-"{"                     { return Parser::make_LBRACE(loc); }
-"}"                     { return Parser::make_RBRACE(loc); }
+"{"                     {
+                          ++open_braces;
+
+                          if (state == LexState::PROBE || state == LexState::PREDICATE)
+                            state = LexState::ACTIONS;
+
+                          return Parser::make_LBRACE(loc);
+                        }
+"}"                     {
+                          // We kept track of open braces to avoid switching
+                          // lexer states if braces were used in action body.
+                          // If open brace count is 0, that means we're done
+                          // with the action block. Actual unmatched brace
+                          // errors will happen in the parser so we don't need
+                          // to try and do error recovery here.
+                          --open_braces;
+                          if (state == LexState::ACTIONS && open_braces == 0)
+                          {
+                            // Discard all the whitespace so that when we're in
+                            // the PROBE state we can easily error out anytime
+                            // we see whitespace
+                            char c;
+                            while ((c = yyinput(yyscanner)) != EOF && std::isspace(c))
+                                    ;
+                            state = LexState::PROBE;
+                          }
+
+                          return Parser::make_RBRACE(loc);
+                        }
 "["                     { return Parser::make_LBRACKET(loc); }
 "]"                     { return Parser::make_RBRACKET(loc); }
 "("                     { return Parser::make_LPAREN(loc); }
 ")"                     { return Parser::make_RPAREN(loc); }
-\//{space}*[\/\{]       { return Parser::make_ENDPRED(loc); } /* If "/" is followed by "/" or "{", choose ENDPRED, otherwise DIV */
+\//{space}*[\/\{]       { // If "/" is followed by "/" or "{", choose ENDPRED, otherwise DIV
+                          // NB: we're not advancing the state here. We advance to the
+                          // next state when we see "{"
+                          assert(state == LexState::PREDICATE);
+
+                          return Parser::make_ENDPRED(loc);
+                        }
 ","                     { return Parser::make_COMMA(loc); }
 "="                     { return Parser::make_ASSIGN(loc); }
 "<<="                   { return Parser::make_LEFTASSIGN(loc); }
@@ -98,7 +162,12 @@ bpftrace|perf           { return Parser::make_STACK_MODE(yytext, loc); }
 "++"                    { return Parser::make_INCREMENT(loc); }
 "--"                    { return Parser::make_DECREMENT(loc); }
 "*"                     { return Parser::make_MUL(loc); }
-"/"                     { return Parser::make_DIV(loc); }
+"/"                     {
+                          if (state == LexState::PROBE)
+                            state = LexState::PREDICATE;
+
+                          return Parser::make_DIV(loc);
+                        }
 "%"                     { return Parser::make_MOD(loc); }
 "&"                     { return Parser::make_BAND(loc); }
 "|"                     { return Parser::make_BOR(loc); }
