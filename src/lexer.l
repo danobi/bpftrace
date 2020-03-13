@@ -19,6 +19,7 @@ using namespace bpftrace;
 %}
 
 ident   [_a-zA-Z][_a-zA-Z0-9]*
+ap      [_a-zA-Z0-9\"\:.\*\[\]\/\\]+
 map     @{ident}|@
 var     ${ident}
 int     [0-9]+|0[xX][0-9a-fA-F]+
@@ -114,6 +115,7 @@ bpftrace|perf           { return Parser::make_STACK_MODE(yytext, loc); }
 "else"                  { return Parser::make_ELSE(loc); }
 "?"                     { return Parser::make_QUES(loc); }
 "unroll"                { return Parser::make_UNROLL(loc); }
+{ap}/{space}+[,\{\/]    { return Parser::make_AP_DEFN(yytext, loc); }
 
 \"                      { yy_push_state(STR, yyscanner); buffer.clear(); }
 <STR>{
