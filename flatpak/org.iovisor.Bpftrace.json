@@ -1,0 +1,42 @@
+{
+    "app-id": "org.iovisor.Bpftrace",
+    "runtime": "org.freedesktop.Platform",
+    "runtime-version": "19.08",
+    "sdk": "org.freedesktop.Sdk",
+    "command": "bpftrace",
+    "finish-args": [
+      "--filesystem=host",
+      "--filesystem=/lib",
+      "--filesystem=/lib32",
+      "--filesystem=/lib64",
+      "--filesystem=/bin",
+      "--filesystem=/sbin",
+      "--filesystem=/usr",
+      "--filesystem=/boot",
+      "--filesystem=/root",
+      "--filesystem=/tmp",
+      "--filesystem=/etc",
+      "--filesystem=/app",
+      "--filesystem=/run",
+      "--filesystem=/proc",
+      "--filesystem=/sys",
+      "--filesystem=/dev",
+      "--filesystem=/var"
+    ],
+    "modules": [
+        {
+            "name": "bpftrace",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -D bpftrace /app/bin/bpftrace"
+            ],
+            "sources": [
+                {
+                    "type": "file",
+                    "path": "bin/bpftrace",
+                    "sha256": "9b0077390363fc3c049909e694c29d2eab6759999294e3bf2ec6683ff6ad858b"
+                }
+            ]
+        }
+    ]
+}
