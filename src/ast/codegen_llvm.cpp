@@ -2096,7 +2096,9 @@ Value *CodegenLLVM::createLogicalAnd(Binop &binop)
   b_.CreateBr(merge_block);
 
   b_.SetInsertPoint(merge_block);
-  return b_.CreateLoad(result);
+  Value *ret = b_.CreateLoad(result);
+  b_.CreateLifetimeEnd(result);
+  return ret;
 }
 
 Value *CodegenLLVM::createLogicalOr(Binop &binop)
@@ -2135,7 +2137,9 @@ Value *CodegenLLVM::createLogicalOr(Binop &binop)
   b_.CreateBr(merge_block);
 
   b_.SetInsertPoint(merge_block);
-  return b_.CreateLoad(result);
+  Value *ret = b_.CreateLoad(result);
+  b_.CreateLifetimeEnd(result);
+  return ret;
 }
 
 void CodegenLLVM::createLog2Function()
@@ -2205,7 +2209,10 @@ void CodegenLLVM::createLog2Function()
     b_.CreateStore(b_.CreateLShr(n, shift), n_alloc);
     b_.CreateStore(b_.CreateAdd(b_.CreateLoad(result), shift), result);
   }
-  b_.CreateRet(b_.CreateLoad(result));
+  Value *ret = b_.CreateLoad(result);
+  b_.CreateLifetimeEnd(n_alloc);
+  b_.CreateLifetimeEnd(result);
+  b_.CreateRet(ret);
 }
 
 void CodegenLLVM::createLinearFunction()
@@ -2274,7 +2281,13 @@ void CodegenLLVM::createLinearFunction()
   b_.SetInsertPoint(le_max);
   Value *div3 = b_.CreateUDiv(b_.CreateSub(b_.CreateLoad(value_alloc), b_.CreateLoad(min_alloc)), b_.CreateLoad(step_alloc));
   b_.CreateStore(b_.CreateAdd(div3, b_.getInt64(1)), result_alloc);
-  b_.CreateRet(b_.CreateLoad(result_alloc));
+  Value *ret = b_.CreateLoad(result_alloc);
+  b_.CreateLifetimeEnd(value_alloc);
+  b_.CreateLifetimeEnd(min_alloc);
+  b_.CreateLifetimeEnd(max_alloc);
+  b_.CreateLifetimeEnd(step_alloc);
+  b_.CreateLifetimeEnd(result_alloc);
+  b_.CreateRet(ret);
 }
 
 void CodegenLLVM::createFormatStringCall(Call &call, int &id, CallArgs &call_args,
