@@ -76,6 +76,7 @@ Vagrant.configure("2") do |config|
       unless ENV['SKIP_BCC_BUILD'] || (params['skip_bcc_build'] == 1)
         box.vm.provision :shell, privileged: false, inline: $build_bcc
       end
+      config.vm.synced_folder ".", "/bpftrace", create: true
       config.vm.post_up_message = <<-HEREDOC
 #######
 bpftrace source is available in /vagrant
