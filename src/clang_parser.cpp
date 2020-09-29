@@ -437,15 +437,26 @@ bool ClangParser::visit_children(CXCursor &cursor, BPFtrace &bpftrace)
 
           // Warn if we already have the struct member defined and is
           // different type and keep the current definition in place.
-          if (structs.count(ptypestr) != 0 &&
-              structs[ptypestr].fields.count(ident)    != 0 &&
-              structs[ptypestr].fields[ident].offset   != offset &&
-              structs[ptypestr].fields[ident].type     != get_sized_type(type) &&
-              structs[ptypestr].fields[ident].is_bitfield && is_bitfield &&
-              structs[ptypestr].fields[ident].bitfield != bitfield &&
-              structs[ptypestr].size                   != ptypesize)
+          //
+          // Don't check anonymous types because it's not like the user can
+          // access a type with no name.
+          if (structs.count(ptypestr) && ident.size() &&
+              structs[ptypestr].fields.count(ident))
           {
-            LOG(WARNING) << "type mismatch for " << ptypestr << "::" << ident;
+            bool same = true;
+
+            if (structs[ptypestr].fields[ident].offset != offset ||
+                structs[ptypestr].fields[ident].type != get_sized_type(type) ||
+                structs[ptypestr].fields[ident].is_bitfield != is_bitfield ||
+                structs[ptypestr].size != ptypesize)
+              same = false;
+
+            if (same && is_bitfield &&
+                (structs[ptypestr].fields[ident].bitfield != bitfield))
+              same = false;
+
+            if (!same)
+              LOG(WARNING) << "type mismatch for " << ptypestr << "::" << ident;
           }
           else
           {
