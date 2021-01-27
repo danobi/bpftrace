@@ -2142,7 +2142,8 @@ void CodegenLLVM::generateProbe(Probe &probe,
   }
   b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 
-  if (probetype(current_attach_point_->provider) == ProbeType::watchpoint &&
+  auto pt = probetype(current_attach_point_->provider);
+  if ((pt == ProbeType::watchpoint || pt == ProbeType::asyncwatchpoint) &&
       current_attach_point_->func.size())
     generateWatchpointSetupProbe(
         func_type, section_name, current_attach_point_->address, index);
@@ -2281,7 +2282,9 @@ void CodegenLLVM::visit(Probe &probe)
 
             probefull_ = attach_point->name(category, func);
           }
-          else if (probetype(attach_point->provider) == ProbeType::watchpoint)
+          else if (probetype(attach_point->provider) == ProbeType::watchpoint ||
+                   probetype(attach_point->provider) ==
+                       ProbeType::asyncwatchpoint)
           {
             // Watchpoint probes comes with target prefix. Strip the target to
             // get the function
@@ -2759,7 +2762,8 @@ void CodegenLLVM::generateWatchpointSetupProbe(
   b_.SetInsertPoint(entry);
 
   // Send SIGSTOP to curtask
-  b_.CreateSignal(ctx_, b_.getInt32(SIGSTOP), current_attach_point_->loc);
+  if (!current_attach_point_->async)
+    b_.CreateSignal(ctx_, b_.getInt32(SIGSTOP), current_attach_point_->loc);
 
   // Pull out function argument
   Value *ctx = func->arg_begin();
