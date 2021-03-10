@@ -5,6 +5,7 @@ add_library(ast
   field_analyser.cpp
   irbuilderbpf.cpp
   printer.cpp
+  probe_intern.cpp
   semantic_analyser.cpp
   callback_visitor.cpp
   visitors.cpp
