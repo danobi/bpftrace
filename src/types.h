@@ -469,6 +469,8 @@ struct Probe
   bool async = false; // for watchpoint probes, if it's an async watchpoint
   uint64_t address = 0;
   uint64_t func_offset = 0;
+  // Which section this probe's generated code can be found
+  std::string section;
 };
 
 const int RESERVED_IDS_PER_ASYNCACTION = 10000;

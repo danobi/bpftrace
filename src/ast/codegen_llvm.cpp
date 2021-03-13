@@ -2121,8 +2121,10 @@ void CodegenLLVM::generateProbe(Probe &probe,
     probe.set_index(index);
   Function *func = Function::Create(
       func_type, Function::ExternalLinkage, section_name, module_.get());
-  func->setSection(
-      get_section_name_for_probe(section_name, index, usdt_location_index));
+  auto probe_section = get_section_name_for_probe(section_name,
+                                                  index,
+                                                  usdt_location_index);
+  func->setSection(probe_section);
   BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
   b_.SetInsertPoint(entry);
 
@@ -2139,11 +2141,14 @@ void CodegenLLVM::generateProbe(Probe &probe,
   }
   b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 
+  bpftrace_.add_probe(
+      probe, probe_section, false, usdt_location_index.value_or(-1));
+
   auto pt = probetype(current_attach_point_->provider);
   if ((pt == ProbeType::watchpoint || pt == ProbeType::asyncwatchpoint) &&
       current_attach_point_->func.size())
     generateWatchpointSetupProbe(
-        func_type, section_name, current_attach_point_->address, index);
+        probe, func_type, section_name, current_attach_point_->address, index);
 }
 
 void CodegenLLVM::visit(Probe &probe)
@@ -2296,7 +2301,6 @@ void CodegenLLVM::visit(Probe &probe)
       }
     }
   }
-  bpftrace_.add_probe(probe);
   current_attach_point_ = nullptr;
 }
 
@@ -2743,6 +2747,7 @@ void CodegenLLVM::createFormatStringCall(Call &call, int &id, CallArgs &call_arg
 }
 
 void CodegenLLVM::generateWatchpointSetupProbe(
+    Probe &probe,
     FunctionType *func_type,
     const std::string &expanded_probe_name,
     int arg_num,
@@ -2753,8 +2758,9 @@ void CodegenLLVM::generateWatchpointSetupProbe(
                                     get_watchpoint_setup_probe_name(
                                         expanded_probe_name),
                                     module_.get());
-  func->setSection(
-      get_section_name_for_watchpoint_setup(expanded_probe_name, index));
+  auto probe_section = get_section_name_for_watchpoint_setup(
+      expanded_probe_name, index);
+  func->setSection(probe_section);
   BasicBlock *entry = BasicBlock::Create(module_->getContext(), "entry", func);
   b_.SetInsertPoint(entry);
 
@@ -2789,6 +2795,10 @@ void CodegenLLVM::generateWatchpointSetupProbe(
   b_.CreateLifetimeEnd(buf);
 
   b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
+
+  bpftrace_.add_probe(probe,
+                      probe_section,
+                      /* is_watchpoint_setup_probe= */ true);
 }
 
 void CodegenLLVM::createPrintMapCall(Call &call)

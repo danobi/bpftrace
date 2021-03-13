@@ -67,6 +67,11 @@ public:
     return 0;
   }
 
+  int add_probe(ast::Probe &p)
+  {
+    return BPFtrace::add_probe(p, {}, false);
+  }
+
   void set_mock_probe_matcher(std::unique_ptr<MockProbeMatcher> probe_matcher)
   {
     probe_matcher_ = std::move(probe_matcher);

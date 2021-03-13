@@ -137,7 +137,10 @@ Probe BPFtrace::generateWatchpointSetupProbe(const std::string &func,
   return setup_probe;
 }
 
-int BPFtrace::add_probe(ast::Probe &p)
+int BPFtrace::add_probe(ast::Probe &p,
+                        const std::string &section,
+                        bool is_watchpoint_setup_probe,
+                        int usdt_location_idx)
 {
   for (auto attach_point : *p.attach_points)
   {
@@ -154,6 +157,7 @@ int BPFtrace::add_probe(ast::Probe &p)
       probe.pid = getpid();
       probe.index = attach_point->index(probe.name) > 0 ?
           attach_point->index(probe.name) : p.index();
+      probe.section = section;
       special_probes_.push_back(probe);
       continue;
     }
@@ -287,31 +291,23 @@ int BPFtrace::add_probe(ast::Probe &p)
       probe.len = attach_point->len;
       probe.mode = attach_point->mode;
       probe.async = attach_point->async;
+      probe.section = section;
 
       if (probetype(attach_point->provider) == ProbeType::usdt)
       {
-        // We must attach to all locations of a USDT marker if duplicates exist
-        // in a target binary. See comment in codegen_llvm.cpp probe generation
-        // code for more details.
-        for (int i = 0; i < attach_point->usdt.num_locations; ++i)
-        {
-          Probe probe_copy = probe;
-          probe_copy.usdt_location_idx = i;
-          probe_copy.index = attach_point->index(func + "_loc" +
-                                                 std::to_string(i));
-
-          probes_.emplace_back(std::move(probe_copy));
-        }
+        probe.usdt_location_idx = usdt_location_idx;
+        probes_.emplace_back(std::move(probe));
       }
       else if ((probetype(attach_point->provider) == ProbeType::watchpoint ||
                 probetype(attach_point->provider) ==
                     ProbeType::asyncwatchpoint) &&
                attach_point->func.size())
       {
-        probes_.emplace_back(
-            generateWatchpointSetupProbe(func_id, *attach_point, p));
-
-        watchpoint_probes_.emplace_back(std::move(probe));
+        if (is_watchpoint_setup_probe)
+          probes_.emplace_back(
+              generateWatchpointSetupProbe(func_id, *attach_point, p));
+        else
+          watchpoint_probes_.emplace_back(std::move(probe));
       }
       else
       {
@@ -862,29 +858,7 @@ std::vector<std::unique_ptr<AttachedProbe>> BPFtrace::attach_probe(
 {
   std::vector<std::unique_ptr<AttachedProbe>> ret;
 
-
-  // use the single-probe program if it exists (as is the case with wildcards
-  // and the name builtin, which must be expanded into separate programs per
-  // probe), else try to find a the program based on the original probe name
-  // that includes wildcards.
-  auto usdt_location_idx = (probe.type == ProbeType::usdt)
-                               ? std::make_optional<int>(
-                                     probe.usdt_location_idx)
-                               : std::nullopt;
-
-  auto name = get_section_name_for_probe(probe.name,
-                                         probe.index,
-                                         usdt_location_idx);
-  auto orig_name = get_section_name_for_probe(probe.orig_name,
-                                              probe.index,
-                                              usdt_location_idx);
-
-  auto section = bpforc.getSection(name);
-  if (!section)
-  {
-    section = bpforc.getSection(orig_name);
-  }
-
+  auto section = bpforc.getSection(probe.section);
   if (!section)
   {
     if (probe.name != probe.orig_name)

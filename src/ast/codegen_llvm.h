@@ -129,7 +129,8 @@ private:
   //
   // We need a separate "setup" probe per probe because we hard code the index
   // of the "real" probe the setup probe is to be replaced by.
-  void generateWatchpointSetupProbe(FunctionType *func_type,
+  void generateWatchpointSetupProbe(Probe &probe,
+                                    FunctionType *func_type,
                                     const std::string &expanded_probe_name,
                                     int arg_num,
                                     int index);
