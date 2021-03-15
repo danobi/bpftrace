@@ -49,6 +49,12 @@ enum class DebugLevel
   kFullDebug
 };
 
+enum class AddProbeType
+{
+  REGULAR,
+  SPECIAL,
+};
+
 inline DebugLevel operator++(DebugLevel &level, int)
 {
   switch (level)
@@ -100,6 +106,7 @@ public:
   {
   }
   virtual ~BPFtrace();
+  virtual int add_probe(Probe probe, AddProbeType type);
   virtual int add_probe(ast::Probe &p,
                         const std::string &section,
                         bool is_watchpoint_setup_probe = false,

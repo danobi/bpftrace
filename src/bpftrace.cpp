@@ -137,6 +137,20 @@ Probe BPFtrace::generateWatchpointSetupProbe(const std::string &func,
   return setup_probe;
 }
 
+int BPFtrace::add_probe(Probe probe, AddProbeType type)
+{
+  switch (type) {
+    case AddProbeType::REGULAR:
+      probes_.push_back(std::move(probe));
+      break;
+    case AddProbeType::SPECIAL:
+      special_probes_.push_back(std::move(probe));
+      break;
+  }
+
+  return 0;
+}
+
 int BPFtrace::add_probe(ast::Probe &p,
                         const std::string &section,
                         bool is_watchpoint_setup_probe,
