@@ -2141,14 +2141,40 @@ void CodegenLLVM::generateProbe(Probe &probe,
   }
   b_.CreateRet(ConstantInt::get(module_->getContext(), APInt(64, 0)));
 
-  bpftrace_.add_probe(
-      probe, probe_section, false, usdt_location_index.value_or(-1));
+  auto bpftrace_probe = generateBpftraceProbe(probe);
+  bpftrace_probe.section = probe_section;
+  bpftrace_probe.usdt_location_idx = usdt_location_index.value_or(-1);
 
   auto pt = probetype(current_attach_point_->provider);
   if ((pt == ProbeType::watchpoint || pt == ProbeType::asyncwatchpoint) &&
       current_attach_point_->func.size())
     generateWatchpointSetupProbe(
         probe, func_type, section_name, current_attach_point_->address, index);
+}
+
+::bpftrace::Probe CodegenLLVM::generateBpftraceProbe(Probe &probe) const
+{
+  ::bpftrace::Probe bt_probe;
+  bt_probe.path = current_attach_point_->target;
+  bt_probe.attach_point = current_attach_point_->attach_point;
+  bt_probe.type = probetype(current_attach_point_->provider);
+  //bt_probe.log_size = log_size_;
+  bt_probe.orig_name = probe.name();
+  bt_probe.ns = current_attach_point_->ns;
+  bt_probe.name = current_attach_point_->name(target, func_id);
+  bt_probe.freq = current_attach_point_->freq;
+  bt_probe.address = current_attach_point_->address;
+  bt_probe.func_offset = current_attach_point_->func_offset;
+  bt_probe.loc = 0;
+  bt_probe.index = current_attach_point_->index(func) > 0
+    ? current_attach_point_->index(func)
+    : probe.index();
+  bt_probe.len = current_attach_point_->len;
+  bt_probe.mode = current_attach_point_->mode;
+  bt_probe.async = current_attach_point_->async;
+  bt_probe.section = section;
+
+  return bt_probe;
 }
 
 void CodegenLLVM::visit(Probe &probe)
@@ -2218,16 +2244,17 @@ void CodegenLLVM::visit(Probe &probe)
       for (const auto &m : matches)
       {
         reset_ids();
-        std::string match = m;
+        std::string func = m;
+        std::string func_id = func;
+        std::string target = attach_point->target;
 
         // USDT probes must specify a target binary path, a provider,
         // and a function name.
         // So we will extract out the path and the provider namespace to get
         // just the function name.
         if (probetype(attach_point->provider) == ProbeType::usdt) {
-          std::string func_id = match;
-          std::string target = erase_prefix(func_id);
-          std::string ns = erase_prefix(func_id);
+          target = erase_prefix(func_id);
+          auto ns = erase_prefix(func_id);
 
           std::string orig_target = attach_point->target;
           std::string orig_ns = attach_point->ns;
@@ -2236,6 +2263,7 @@ void CodegenLLVM::visit(Probe &probe)
           // probe.
           attach_point->target = target;
           attach_point->ns = ns;
+          attach_point->func = func_id;
           probefull_ = attach_point->name(func_id);
 
           // Set the probe identifier so that we can read arguments later
@@ -2257,7 +2285,7 @@ void CodegenLLVM::visit(Probe &probe)
           {
             reset_ids();
 
-            std::string full_func_id = match + "_loc" + std::to_string(i);
+            std::string full_func_id = m + "_loc" + std::to_string(i);
             generateProbe(probe, full_func_id, probefull_, func_type, true, i);
             current_usdt_location_index_++;
           }
@@ -2279,10 +2307,11 @@ void CodegenLLVM::visit(Probe &probe)
           {
             // Tracepoint and uprobe probes must specify both a target
             // (tracepoint category) and a function name
-            std::string func = match;
-            std::string category = erase_prefix(func);
+            // We extract the target from func_id so that a resolved target and a
+            // resolved function name are used in the probe.
+            target = erase_prefix(func_id);
 
-            probefull_ = attach_point->name(category, func);
+            probefull_ = attach_point->name($arget, func_id);
           }
           else if (probetype(attach_point->provider) == ProbeType::watchpoint ||
                    probetype(attach_point->provider) ==
@@ -2290,13 +2319,13 @@ void CodegenLLVM::visit(Probe &probe)
           {
             // Watchpoint probes comes with target prefix. Strip the target to
             // get the function
-            erase_prefix(match);
-            probefull_ = attach_point->name(match);
+            target = erase_prefix(func_id);
+            probefull_ = attach_point->name(func_id);
           }
           else
-            probefull_ = attach_point->name(match);
+            probefull_ = attach_point->name(m);
 
-          generateProbe(probe, match, probefull_, func_type, true);
+          generateProbe(probe, m, probefull_, func_type, true);
         }
       }
     }

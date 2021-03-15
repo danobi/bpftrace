@@ -107,6 +107,7 @@ private:
                      FunctionType *func_type,
                      bool expansion,
                      std::optional<int> usdt_location_index = std::nullopt);
+  ::bpftrace::Probe generateBpftraceProbe(Probe &probe) const;
 
   [[nodiscard]] ScopedExprDeleter accept(Node *node);
 
