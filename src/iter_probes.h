@@ -34,6 +34,14 @@ const std::vector<IterProbeItem> ITER_PROBE_LIST = {
       return b.btf_.has_data() && b.feature_->has_prog_iter_task_file();
     }
   },
+  {
+    .name = "pagecache",
+    .ctx_type = "bpf_iter__pagecache",
+    .ctx_args = { "struct page * page" },
+    .supported = [](BPFtrace &b) {
+      return b.btf_.has_data() && b.feature_->has_prog_iter_pagecache();
+    }
+  }
   // clang-format on
 };
 

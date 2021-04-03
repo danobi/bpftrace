@@ -380,7 +380,8 @@ std::string BPFfeature::report(void)
       << "  perf_event: " << to_str(has_prog_perf_event())
       << "  kfunc: " << to_str(has_prog_kfunc())
       << "  iter:task: " << to_str(has_prog_iter_task())
-      << "  iter:task_file: " << to_str(has_prog_iter_task_file()) << std::endl;
+      << "  iter:task_file: " << to_str(has_prog_iter_task_file())
+      << "  iter:pagecache: " << to_str(has_prog_iter_pagecache()) << std::endl;
 
   return buf.str();
 }

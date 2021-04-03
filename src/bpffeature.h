@@ -106,6 +106,9 @@ public:
   DEFINE_PROG_TEST_FUNC(iter_task_file,
                         libbpf::BPF_PROG_TYPE_TRACING,
                         "bpf_iter__task_file");
+  DEFINE_PROG_TEST_FUNC(iter_pagecache,
+                        libbpf::BPF_PROG_TYPE_TRACING,
+                        "bpf_iter__pagecache");
 
 protected:
   std::optional<bool> has_loop_;
