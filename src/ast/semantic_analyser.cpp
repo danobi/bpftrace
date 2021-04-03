@@ -2,6 +2,7 @@
 #include "arch/arch.h"
 #include "ast.h"
 #include "fake_map.h"
+#include "iter_probes.h"
 #include "log.h"
 #include "parser.tab.hh"
 #include "printf.h"
@@ -251,19 +252,17 @@ void SemanticAnalyser::visit(Builtin &builtin)
         if (pt == ProbeType::iter)
         {
           std::string type;
+          for (const auto &p : ITER_PROBE_LIST)
+          {
+            if (func == p.name)
+            {
+              type = p.ctx_type;
+              break;
+            }
+          }
 
-          if (func == "task")
-          {
-            type = "bpf_iter__task";
-          }
-          else if (func == "task_file")
-          {
-            type = "bpf_iter__task_file";
-          }
-          else
-          {
+          if (type.empty())
             LOG(ERROR, builtin.loc, err_) << "unsupported iter type: " << func;
-          }
 
           builtin.type = CreatePointer(
               CreateRecord(bpftrace_.structs_[type].size, "struct " + type),
@@ -2597,19 +2596,20 @@ void SemanticAnalyser::visit(AttachPoint &ap)
   {
     bool supported = false;
 
-    if (ap.func == "task")
-    {
-      supported = bpftrace_.feature_->has_prog_iter_task() &&
-                  bpftrace_.btf_.has_data();
-    }
-    else if (ap.func == "task_file")
-    {
-      supported = bpftrace_.feature_->has_prog_iter_task_file() &&
-                  bpftrace_.btf_.has_data();
-    }
-    else if (listing_)
+    if (listing_)
     {
       supported = true;
+    }
+    else
+    {
+      for (const auto &p : ITER_PROBE_LIST)
+      {
+        if (ap.func == p.name)
+        {
+          supported = p.supported(bpftrace_);
+          break;
+        }
+      }
     }
 
     if (!supported)

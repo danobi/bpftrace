@@ -1,4 +1,5 @@
 #include "field_analyser.h"
+#include "iter_probes.h"
 #include "log.h"
 #include "probe_matcher.h"
 #include <cassert>
@@ -42,13 +43,13 @@ void FieldAnalyser::visit(Builtin &builtin)
     {
       std::string it_struct;
 
-      if (attach_func_ == "task")
+      for (const auto &p : ITER_PROBE_LIST)
       {
-        it_struct = "struct bpf_iter__task";
-      }
-      else if (attach_func_ == "task_file")
-      {
-        it_struct = "struct bpf_iter__task_file";
+        if (attach_func_ == p.name)
+        {
+          it_struct = "struct " + p.ctx_type;
+          break;
+        }
       }
 
       if (!it_struct.empty())

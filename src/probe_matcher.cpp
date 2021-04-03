@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "bpftrace.h"
+#include "iter_probes.h"
 #include "log.h"
 #include "probe_matcher.h"
 #include "utils.h"
@@ -407,15 +408,14 @@ FuncParamLists ProbeMatcher::get_iters_params(
 
   for (auto& iter : iters)
   {
-    if (iter == "task")
+    for (const auto& p : ITER_PROBE_LIST)
     {
-      params[iter].push_back("struct task_struct * task");
-    }
-    else if (iter == "task_file")
-    {
-      params[iter].push_back("struct task_struct * task");
-      params[iter].push_back("int fd");
-      params[iter].push_back("struct file * file");
+      if (iter == p.name)
+      {
+        auto it = params[iter].begin();
+        params[iter].insert(it, p.ctx_args.begin(), p.ctx_args.end());
+        break;
+      }
     }
   }
 
