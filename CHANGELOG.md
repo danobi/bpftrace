@@ -17,6 +17,8 @@ and this project adheres to
 #### Removed
 
 #### Fixed
+- Fix --info reporting wrong libbpf build info
+  - [#1776](https://github.com/iovisor/bpftrace/pull/1776)
 
 #### Tools
 
