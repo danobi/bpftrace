@@ -264,6 +264,7 @@ if (LIBBPF_BTF_DUMP_FOUND)
   endif()
 endif(LIBBPF_BTF_DUMP_FOUND)
 
+add_subdirectory(src/aot)
 add_subdirectory(src/arch)
 add_subdirectory(src/ast)
 add_subdirectory(src)
