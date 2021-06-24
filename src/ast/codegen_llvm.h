@@ -5,6 +5,7 @@
 #include <ostream>
 #include <tuple>
 
+#include "bpforc.h"
 #include "bpftrace.h"
 #include "irbuilderbpf.h"
 #include "location.hh"
