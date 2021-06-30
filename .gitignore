@@ -3,3 +3,4 @@ build-*/
 tests/runtime/*.pyc
 .vagrant
 tests/**/*.bc
+*.btaot
