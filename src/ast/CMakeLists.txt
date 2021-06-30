@@ -1,5 +1,6 @@
+add_library(ast_defs ast.cpp)
+
 add_library(ast
-  ast.cpp
   attachpoint_parser.cpp
   codegen_llvm.cpp
   field_analyser.cpp
@@ -13,16 +14,16 @@ add_library(ast
   visitors.cpp
 )
 
-target_include_directories(ast PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_include_directories(ast PUBLIC ${CMAKE_SOURCE_DIR}/src/ast)
-target_include_directories(ast PUBLIC ${CMAKE_BINARY_DIR})
-target_link_libraries(ast arch)
+target_include_directories(ast_defs PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(ast_defs PUBLIC ${CMAKE_SOURCE_DIR}/src/ast)
+target_include_directories(ast_defs PUBLIC ${CMAKE_BINARY_DIR})
+target_link_libraries(ast ast_defs arch)
 
 if (HAVE_BCC_KFUNC)
   target_compile_definitions(ast PRIVATE HAVE_BCC_KFUNC)
 endif(HAVE_BCC_KFUNC)
 
-add_dependencies(ast parser)
+add_dependencies(ast_defs parser)
 
 if (STATIC_LINKING)
   set(clang_libs
