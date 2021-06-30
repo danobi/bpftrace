@@ -2,7 +2,6 @@ add_library(ast
   ast.cpp
   attachpoint_parser.cpp
   codegen_llvm.cpp
-  fake_map.cpp
   field_analyser.cpp
   irbuilderbpf.cpp
   pass_manager.cpp

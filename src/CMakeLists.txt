@@ -18,6 +18,7 @@ add_library(runtime
   btf.cpp
   child.cpp
   disasm.cpp
+  fake_map.cpp
   imap.cpp
   log.cpp
   map.cpp
