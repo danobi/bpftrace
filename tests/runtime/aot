@@ -1,0 +1,4 @@
+NAME special probes
+RUN bpftrace -e 'BEGIN { printf("begin"); exit() } END { print("end") }' --aot /tmp/tmpscript.btaot && pwd && ../src/aot/bpftrace-aotrt /tmp/tmpscript.btaot
+EXPECT beginend
+TIMEOUT 5
