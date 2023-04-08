@@ -126,5 +126,14 @@ struct SkbOutput
   std::vector<llvm::Type*> asLLVMType(ast::IRBuilderBPF& b);
 } __attribute__((packed));
 
+struct String
+{
+  uint64_t length;
+  // See below why we don't use a flexible length array
+  char content[0];
+
+  std::vector<llvm::Type*> asLLVMType(ast::IRBuilderBPF& b, size_t strlen);
+} __attribute__((packed));
+
 } // namespace AsyncEvent
 } // namespace bpftrace
