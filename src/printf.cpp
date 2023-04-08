@@ -1,3 +1,4 @@
+#include "log.h"
 #include "printf.h"
 #include "printf_format_types.h"
 #include "struct.h"
@@ -6,6 +7,7 @@ namespace bpftrace {
 PrintableString::PrintableString(std::string value, size_t read)
     : value_(std::move(value))
 {
+  LOG(DEBUG) << "value=" << value_ << " value_.size()=" << value_.size() << " read=" << read;
   if (value_.size() >= read)
     value_ += "...";
 }
