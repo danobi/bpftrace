@@ -59,16 +59,6 @@ private:
   bool escape_hex_ = true;
 };
 
-class PrintableCString : public virtual IPrintable
-{
-public:
-  PrintableCString(char* value) : value_(value) { }
-  int print(char* buf, size_t size, const char* fmt) override;
-
-private:
-  char* value_;
-};
-
 class PrintableInt : public virtual IPrintable
 {
 public:

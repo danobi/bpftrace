@@ -29,11 +29,6 @@ void PrintableBuffer::escape_hex(bool value)
   escape_hex_ = value;
 }
 
-int PrintableCString::print(char *buf, size_t size, const char *fmt)
-{
-  return snprintf(buf, size, fmt, value_);
-}
-
 int PrintableInt::print(char *buf, size_t size, const char *fmt)
 {
   return snprintf(buf, size, fmt, value_);
