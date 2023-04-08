@@ -110,8 +110,21 @@ void CodegenLLVM::visit(String &string)
 {
   string.str.resize(string.type.GetSize() - 1);
   Constant *const_str = ConstantDataArray::getString(module_->getContext(), string.str, true);
-  AllocaInst *buf = b_.CreateAllocaBPF(string.type, "str");
-  b_.CreateStore(const_str, buf);
+  auto elements = AsyncEvent::String().asLLVMType(b_, bpftrace_.strlen_);
+  std::ostringstream str_buf_struct_name;
+  str_buf_struct_name << "string_" << bpftrace_.strlen_ << "_t";
+  StructType *buf_struct = b_.GetStructType(str_buf_struct_name.str(),
+                                            elements,
+                                            true);
+  AllocaInst *buf = b_.CreateAllocaBPF(buf_struct, "str");
+  Value *strlen_offset = b_.CreateGEP(buf_struct,
+                                      buf,
+                                      { b_.getInt32(0), b_.getInt32(0) });
+  Value *str_offset = b_.CreateGEP(buf_struct,
+                                   buf,
+                                   { b_.getInt32(0), b_.getInt32(1) });
+  b_.CreateStore(b_.getInt64(bpftrace_.strlen_), strlen_offset);
+  b_.CreateStore(const_str, str_offset);
   expr_ = buf;
   expr_deleter_ = [this, buf]() { b_.CreateLifetimeEnd(buf); };
 }
@@ -224,10 +237,23 @@ void CodegenLLVM::visit(Builtin &builtin)
   }
   else if (builtin.ident == "comm")
   {
-    AllocaInst *buf = b_.CreateAllocaBPF(builtin.type, "comm");
+    auto elements = AsyncEvent::String().asLLVMType(b_, builtin.type.GetSize());
+    std::ostringstream str_buf_struct_name;
+    str_buf_struct_name << "string_" << bpftrace_.strlen_ << "_t";
+    StructType *buf_struct = b_.GetStructType(str_buf_struct_name.str(),
+                                              elements,
+                                              true);
+    AllocaInst *buf = b_.CreateAllocaBPF(buf_struct, "str_buffer");
+    Value *strlen_offset = b_.CreateGEP(buf_struct,
+                                        buf,
+                                        { b_.getInt32(0), b_.getInt32(0) });
+    Value *str_offset = b_.CreateGEP(buf_struct,
+                                     buf,
+                                     { b_.getInt32(0), b_.getInt32(1) });
+    b_.CreateStore(b_.getInt64(builtin.type.GetSize()), strlen_offset);
     // initializing memory needed for older kernels:
     b_.CREATE_MEMSET(buf, b_.getInt8(0), builtin.type.GetSize(), 1);
-    b_.CreateGetCurrentComm(ctx_, buf, builtin.type.GetSize(), builtin.loc);
+    b_.CreateGetCurrentComm(ctx_, str_offset, builtin.type.GetSize(), builtin.loc);
     expr_ = buf;
     expr_deleter_ = [this, buf]() { b_.CreateLifetimeEnd(buf); };
   }
@@ -555,12 +581,25 @@ void CodegenLLVM::visit(Call &call)
     } else {
       b_.CreateStore(b_.getInt64(bpftrace_.strlen_), strlen);
     }
-    AllocaInst *buf = b_.CreateAllocaBPF(bpftrace_.strlen_, "str");
-    b_.CREATE_MEMSET(buf, b_.getInt8(0), bpftrace_.strlen_, 1);
+    auto elements = AsyncEvent::String().asLLVMType(b_, bpftrace_.strlen_);
+    std::ostringstream str_buf_struct_name;
+    str_buf_struct_name << "string_" << bpftrace_.strlen_ << "_t";
+    StructType *buf_struct = b_.GetStructType(str_buf_struct_name.str(),
+                                              elements,
+                                              true);
+    AllocaInst *buf = b_.CreateAllocaBPF(buf_struct, "str_buffer");
+    Value *strlen_offset = b_.CreateGEP(buf_struct,
+                                        buf,
+                                        { b_.getInt32(0), b_.getInt32(0) });
+    Value *str_offset = b_.CreateGEP(buf_struct,
+                                     buf,
+                                     { b_.getInt32(0), b_.getInt32(1) });
+    b_.CreateStore(strlen, strlen_offset);
+    b_.CREATE_MEMSET(str_offset, b_.getInt8(0), bpftrace_.strlen_, 1);
     auto arg0 = call.vargs->front();
     auto scoped_del = accept(call.vargs->front());
     b_.CreateProbeReadStr(ctx_,
-                          buf,
+                          str_offset,
                           b_.CreateLoad(b_.getInt64Ty(), strlen),
                           expr_,
                           arg0->type.GetAS(),

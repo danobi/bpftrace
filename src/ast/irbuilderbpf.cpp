@@ -525,12 +525,6 @@ CallInst *IRBuilderBPF::CreateProbeReadStr(Value *ctx,
 {
   assert(ctx && ctx->getType() == getInt8PtrTy());
   assert(size && size->getType()->isIntegerTy());
-  if ([[maybe_unused]] auto *dst_alloca = dyn_cast<AllocaInst>(dst))
-  {
-    assert(dst_alloca->getAllocatedType()->isArrayTy() &&
-           dst_alloca->getAllocatedType()->getArrayElementType() ==
-               getInt8Ty());
-  }
 
   auto *size_i32 = size;
   if (size_i32->getType()->getScalarSizeInBits() != 32)
@@ -1316,14 +1310,10 @@ CallInst *IRBuilderBPF::CreateGetStackId(Value *ctx,
 }
 
 void IRBuilderBPF::CreateGetCurrentComm(Value *ctx,
-                                        AllocaInst *buf,
+                                        Value *buf,
                                         size_t size,
                                         const location &loc)
 {
-  assert(buf->getAllocatedType()->isArrayTy() &&
-         buf->getAllocatedType()->getArrayNumElements() >= size &&
-         buf->getAllocatedType()->getArrayElementType() == getInt8Ty());
-
   // long bpf_get_current_comm(char *buf, int size_of_buf)
   // Return: 0 on success or negative error
   FunctionType *getcomm_func_type = FunctionType::get(

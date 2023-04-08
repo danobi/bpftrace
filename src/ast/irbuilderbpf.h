@@ -170,7 +170,7 @@ public:
                        Value *callee,
                        ArrayRef<Value *> args,
                        const Twine &Name);
-  void        CreateGetCurrentComm(Value *ctx, AllocaInst *buf, size_t size, const location& loc);
+  void        CreateGetCurrentComm(Value *ctx, Value *buf, size_t size, const location& loc);
   void CreatePerfEventOutput(Value *ctx,
                              Value *data,
                              size_t size,

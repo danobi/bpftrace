@@ -3,6 +3,12 @@
 #include "struct.h"
 
 namespace bpftrace {
+PrintableString::PrintableString(std::string value, size_t read)
+    : value_(std::move(value))
+{
+  if (value_.size() >= read)
+    value_ += "...";
+}
 
 int PrintableString::print(char *buf, size_t size, const char *fmt)
 {

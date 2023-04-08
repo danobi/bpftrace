@@ -35,7 +35,7 @@ public:
 class PrintableString : public virtual IPrintable
 {
 public:
-  PrintableString(std::string value) : value_(std::move(value)) { }
+  PrintableString(std::string value, size_t read = 0);
   int print(char* buf, size_t size, const char* fmt) override;
 
 private:
