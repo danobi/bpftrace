@@ -33,6 +33,7 @@ exponent {int}[eE]{int}
 ident    [_a-zA-Z][_a-zA-Z0-9]*
 map      @{ident}|@
 var      ${ident}
+param    "$"[0-9]+
 hspace   [ \t]
 vspace   [\n\r]
 space    {hspace}|{vspace}
@@ -135,7 +136,7 @@ bpftrace|perf|raw       { return Parser::make_STACK_MODE(yytext, loc); }
 "~"                     { return Parser::make_BNOT(loc); }
 "."                     { return Parser::make_DOT(loc); }
 "->"                    { return Parser::make_PTR(loc); }
-"$"[0-9]+               { return Parser::make_PARAM(yytext, loc); }
+{param}                 { return Parser::make_PARAM(yytext, loc); }
 "$"#                    { return Parser::make_PARAMCOUNT(loc); }
 "#"[^!].*               { return Parser::make_CPREPROC(yytext, loc); }
 "if"                    { return Parser::make_IF(loc); }
