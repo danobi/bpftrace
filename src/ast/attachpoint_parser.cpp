@@ -261,7 +261,15 @@ AttachPointParser::State AttachPointParser::lex_attachpoint(
 
       std::string param_idx_str = raw.substr(idx + 1, len);
       size_t pos, param_idx;
-      param_idx = std::stoll(param_idx_str, &pos, 0);
+      try
+      {
+        param_idx = std::stoll(param_idx_str, &pos, 0);
+      }
+      catch (const std::out_of_range &ex)
+      {
+        errs_ << "Positional parameter out of range";
+        return State::INVALID;
+      }
 
       if (pos != param_idx_str.size())
       {

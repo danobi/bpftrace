@@ -9,7 +9,7 @@
 %define api.value.type variant
 %define parse.assert
 %define parse.trace
-%expect 5
+%expect 4
 
 %define parse.error verbose
 
@@ -114,7 +114,9 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %token <std::string> BUILTIN_TYPE "builtin type"
 %token <std::string> SIZED_TYPE "sized type"
 %token <std::string> IDENT "identifier"
-%token <std::string> PATH "path"
+%token <std::string> ATTACH_POINT_DEF "attach point definition"
+%token <std::string> BEGIN_AP_DEF "BEGIN"
+%token <std::string> END_AP_DEF "END"
 %token <std::string> CPREPROC "preprocessor directive"
 %token <std::string> STRUCT_DEFN "struct definition"
 %token <std::string> ENUM "enum"
@@ -125,9 +127,8 @@ void yyerror(bpftrace::Driver &driver, const char *s);
 %token <int64_t> INT "integer"
 %token <std::string> STACK_MODE "stack_mode"
 
-
 %type <ast::Operator> unary_op compound_op
-%type <std::string> attach_point_def c_definitions ident
+%type <std::string> c_definitions ident
 
 %type <ast::AttachPoint *> attach_point
 %type <ast::AttachPointList *> attach_points
@@ -279,37 +280,9 @@ attach_points:
                 ;
 
 attach_point:
-                attach_point_def                { $$ = new ast::AttachPoint($1, @$); }
-                ;
-
-attach_point_def:
-                attach_point_def ident    { $$ = $1 + $2; }
-                // Since we're double quoting the STRING for the benefit of the
-                // AttachPointParser, we have to make sure we re-escape any double
-                // quotes.
-        |       attach_point_def STRING   { $$ = $1 + "\"" + std::regex_replace($2, std::regex("\""), "\\\"") + "\""; }
-        |       attach_point_def PATH     { $$ = $1 + $2; }
-        |       attach_point_def INT      { $$ = $1 + std::to_string($2); }
-        |       attach_point_def COLON    { $$ = $1 + ":"; }
-        |       attach_point_def DOT      { $$ = $1 + "."; }
-        |       attach_point_def PLUS     { $$ = $1 + "+"; }
-        |       attach_point_def MUL      { $$ = $1 + "*"; }
-        |       attach_point_def LBRACKET { $$ = $1 + "["; }
-        |       attach_point_def RBRACKET { $$ = $1 + "]"; }
-        |       attach_point_def param
-                {
-                  if ($2->ptype != PositionalParameterType::positional)
-                  {
-                    error(@$, "Not a positional parameter");
-                    YYERROR;
-                  }
-                  // "Un-parse" the positional parameter back into text so
-                  // we can give it to the AttachPointParser. This is kind of
-                  // a hack but there doesn't look to be any other way.
-                  $$ = $1 + "$" + std::to_string($2->n);
-                  delete $2;
-                }
-        |       %empty                    { $$ = ""; }
+                ATTACH_POINT_DEF               { $$ = new ast::AttachPoint($1, @$); }
+        |       BEGIN_AP_DEF                   { $$ = new ast::AttachPoint($1, @$); }
+        |       END_AP_DEF                     { $$ = new ast::AttachPoint($1, @$); }
                 ;
 
 pred:

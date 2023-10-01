@@ -37,7 +37,12 @@ param    "$"[0-9]+
 hspace   [ \t]
 vspace   [\n\r]
 space    {hspace}|{vspace}
-path     :(\\.|[_\-\./a-zA-Z0-9#+\*])+
+aparg    (\\.|{param}|[_\-\./a-zA-Z0-9#+\*\[\]\"])+
+/* Attachpoint definition is disambiguated from every other keyword
+ * by the presence of mandatory colon. However, doing this requires
+ * BEGIN and END to be separate keywords.
+ */
+apdef    ({aparg}:)+{aparg}
 builtin  arg[0-9]|args|cgroup|comm|cpid|numaid|cpu|ctx|curtask|elapsed|func|gid|pid|probe|rand|retval|sarg[0-9]|tid|uid|username|jiffies
 call     avg|buf|cat|cgroupid|clear|count|delete|exit|hist|join|kaddr|kptr|ksym|lhist|macaddr|max|min|ntop|override|print|printf|cgroup_path|reg|signal|stats|str|strerror|strftime|strncmp|strcontains|sum|system|time|uaddr|uptr|usym|zero|path|unwatch|bswap|skboutput|pton|debugf
 
@@ -88,7 +93,9 @@ bpftrace|perf|raw       { return Parser::make_STACK_MODE(yytext, loc); }
                             driver.error(loc, e.what());
                           }
                         }
-{path}                  { return Parser::make_PATH(yytext, loc); }
+{apdef}                 { return Parser::make_ATTACH_POINT_DEF(yytext, loc); }
+"BEGIN"                 { return Parser::make_BEGIN_AP_DEF(yytext, loc); }
+"END"                   { return Parser::make_END_AP_DEF(yytext, loc); }
 {map}                   { return Parser::make_MAP(yytext, loc); }
 {var}                   { return Parser::make_VAR(yytext, loc); }
 ":"                     { return Parser::make_COLON(loc); }

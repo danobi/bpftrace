@@ -1993,9 +1993,9 @@ TEST(Parser, non_fatal_errors)
   // displayed
   test_parse_failure("uprobe:asdf:Stream {} tracepoint:only_one_arg {}",
                      R"(
-stdin:1:22-46: ERROR: tracepoint probe type requires 2 arguments
+stdin:1:23-46: ERROR: tracepoint probe type requires 2 arguments
 uprobe:asdf:Stream {} tracepoint:only_one_arg {}
-                     ~~~~~~~~~~~~~~~~~~~~~~~~
+                      ~~~~~~~~~~~~~~~~~~~~~~~
 )");
 }
 
