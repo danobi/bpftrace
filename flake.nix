@@ -30,7 +30,7 @@
                 src = super.fetchFromGitHub {
                   owner = "libbpf";
                   repo = "libbpf";
-                  rev = "3189f70538b50fe3d2fd63f77351991a224e435b";
+                  rev = "93f360cf4b4673c1db66c24966d86180a7c1a5bf";
                   # If you don't know the hash the first time, set:
                   # hash = "";
                   # then nix will fail the build with such an error message:
