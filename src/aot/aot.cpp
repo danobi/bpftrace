@@ -17,10 +17,16 @@
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/vector.hpp>
 
+// bfd.h assumes everyone is using autotools and will error out unless
+// PACKAGE is defined. Some distros patch this check out.
+#define PACKAGE "bpftrace"
+#include <bfd.h>
+
 #include "filesystem.h"
 #include "log.h"
 #include "utils.h"
 
+#define AOT_ELF_SECTION ".btaot"
 static constexpr auto AOT_MAGIC = 0xA07;
 static constexpr auto AOT_SHIM_NAME = "bpftrace-aotrt";
 
@@ -43,6 +49,8 @@ struct Header
 
 static_assert(sizeof(Header) == 48);
 static_assert(sizeof(std::size_t) <= sizeof(uint64_t));
+
+#define BFD_ERR() ::bfd_errmsg(::bfd_get_error())
 
 namespace bpftrace {
 namespace aot {
@@ -208,6 +216,58 @@ int generate_section(std::vector<uint8_t> &out,
   p += hdr.bc_len;
 
   return 0;
+}
+
+// Injects the .btaot section into the cloned shim
+int inject_section(const std::string &out, const std::vector<uint8_t> &section)
+{
+  ::bfd *abfd = nullptr;
+  ::bfd_section *sec;
+  int err = 1;
+
+  if (::bfd_init() != BFD_INIT_MAGIC)
+  {
+    LOG(ERROR) << "bpftrace running against unrecognized libbfd";
+    goto out;
+  }
+
+  abfd = ::bfd_openr(out.c_str(), nullptr);
+  if (!abfd)
+  {
+    LOG(ERROR) << "Failed to bfd_openr() " << out << ": " << BFD_ERR();
+    goto out;
+  }
+
+  // Create new section and inform bfd that this section contains data
+  sec = ::bfd_make_section_with_flags(abfd, AOT_ELF_SECTION, SEC_HAS_CONTENTS);
+  if (!sec)
+  {
+    if (::bfd_get_error() == ::bfd_error_no_error)
+      LOG(ERROR) << AOT_ELF_SECTION << " already exists in " << out;
+    else
+      LOG(ERROR) << "Failed to bfd_make_section() " << out << ": " << BFD_ERR();
+    goto out;
+  }
+
+  // Set section size
+  if (!::bfd_set_section_size(sec, section.size()))
+  {
+    LOG(ERROR) << "Failed to set new section size: " << BFD_ERR();
+    goto out;
+  }
+
+  // Write contents into section
+  if (!::bfd_set_section_contents(abfd, sec, section.data(), 0, section.size()))
+  {
+    LOG(ERROR) << "Failed to write section contents: " << BFD_ERR();
+    goto out;
+  }
+
+  err = 0;
+out:
+  if (abfd && !::bfd_close(abfd))
+    LOG(ERROR) << "Failed to bfd_close() " << out << ": " << BFD_ERR();
+  return err;
 }
 
 } // namespace
