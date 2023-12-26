@@ -1,6 +1,7 @@
 #include "aot.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
@@ -16,10 +17,12 @@
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/vector.hpp>
 
+#include "filesystem.h"
 #include "log.h"
 #include "utils.h"
 
 static constexpr auto AOT_MAGIC = 0xA07;
+static constexpr auto AOT_SHIM_NAME = "bpftrace-aotrt";
 
 // AOT payload will have this header at the beginning. We don't worry about
 // versioning the header b/c we enforce that an AOT compiled script may only
@@ -93,6 +96,47 @@ int load_bytecode(BPFtrace &bpftrace, uint8_t *ptr, size_t len)
   catch (const std::exception &ex)
   {
     LOG(ERROR) << "Failed to deserialize metadata: " << ex.what();
+    return 1;
+  }
+
+  return 0;
+}
+
+// Locates bpftrace_aotrt binary from $PATH and clones it
+int clone_shim(const std::string &out)
+{
+  std::error_code ec;
+
+  const char *path_env = ::getenv("PATH");
+  if (!path_env)
+  {
+    LOG(ERROR) << "$PATH is empty";
+    return 1;
+  }
+
+  std::optional<std_filesystem::path> shim;
+  auto paths = split_string(path_env, ':', true);
+  for (const auto &path : paths)
+  {
+    auto fpath = std_filesystem::path(path) / AOT_SHIM_NAME;
+    if (std_filesystem::exists(fpath, ec))
+    {
+      shim = fpath;
+      break;
+    }
+  }
+
+  if (!shim)
+  {
+    LOG(ERROR) << "Failed to locate " << AOT_SHIM_NAME
+               << " shim binary. Is it in $PATH?";
+    return 1;
+  }
+
+  auto copyopts = std_filesystem::copy_options::overwrite_existing;
+  if (!std_filesystem::copy_file(*shim, out, copyopts, ec) || ec)
+  {
+    LOG(ERROR) << "Failed to clone aotrt shim: " << ec;
     return 1;
   }
 
