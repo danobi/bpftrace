@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <istream>
+#include <memory>
 #include <streambuf>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -16,10 +17,15 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/vector.hpp>
+#include <gelf.h>
+#include <libelf.h>
 
 #include "filesystem.h"
 #include "log.h"
 #include "utils.h"
+
+#define AOT_ELF_SECTION ".btaot"
+#define AOT_ELF_SECTION_SZ sizeof(AOT_ELF_SECTION)
 
 static constexpr auto AOT_MAGIC = 0xA07;
 static constexpr auto AOT_SHIM_NAME = "bpftrace-aotrt";
@@ -208,6 +214,144 @@ int generate_section(std::vector<uint8_t> &out,
   p += hdr.bc_len;
 
   return 0;
+}
+
+// Injects the .BTAOT section into the cloned shim
+int inject_section(const std::string &out, std::vector<uint8_t> &section)
+{
+  std::unique_ptr<char[]> strings;
+  size_t secnameoff = 0;
+  Elf *elf = nullptr;
+  Elf_Data *strdata;
+  Elf_Data *secdata;
+  Elf64_Shdr *shdr;
+  Elf_Scn *strsec;
+  Elf_Scn *sec;
+  int err = 1;
+
+  int fd = ::open(out.c_str(), O_RDWR);
+  if (fd < 0)
+  {
+    LOG(ERROR) << "Failed to open " << out << ": " << std::strerror(errno);
+    goto out;
+  }
+
+  // Initialize libelf
+  if (::elf_version(EV_CURRENT) == EV_NONE)
+  {
+    LOG(ERROR) << "Failed to initialize libelf: " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Open elf for modification
+  elf = ::elf_begin(fd, ELF_C_RDWR, nullptr);
+  if (!elf)
+  {
+    LOG(ERROR) << "Failed to elf_begin(): " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Get the string section index
+  size_t shstrndx;
+  if (::elf_getshdrstrndx(elf, &shstrndx) != 0)
+  {
+    LOG(ERROR) << "Failed to elf_getshdrstrndx() strsec: " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Get the string section
+  strsec = ::elf_getscn(elf, shstrndx);
+  if (!strsec)
+  {
+    LOG(ERROR) << "Failed to elf_getscn() strsec: " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Get string section data
+  strdata = ::elf_getdata(strsec, nullptr);
+  if (!strdata)
+  {
+    LOG(ERROR) << "Failed to elf_getdata() strsec: " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Clone string table and add 1 more to end
+  secnameoff = strdata->d_size;
+  strings = std::make_unique<char[]>(strdata->d_size + AOT_ELF_SECTION_SZ);
+  memcpy(strings.get(), strdata->d_buf, strdata->d_size);
+  memcpy(strings.get() + strdata->d_size, AOT_ELF_SECTION, AOT_ELF_SECTION_SZ);
+
+  // Update the string table with new data
+  strdata->d_buf = strings.get();
+  strdata->d_size += AOT_ELF_SECTION_SZ;
+  ::elf_flagdata(strdata, ELF_C_SET, ELF_F_DIRTY);
+
+  // Update string table size in SHT
+  shdr = ::elf64_getshdr(strsec);
+  if (!shdr)
+  {
+    LOG(ERROR) << "Failed to elf64_getshdr() strsec: " << ::elf_errmsg(-1);
+    goto out;
+  }
+  shdr->sh_size = strdata->d_size;
+
+  // Create new section
+  sec = ::elf_newscn(elf);
+  if (!sec)
+  {
+    LOG(ERROR) << "Failed to elf_newscn(): " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Add section data to our new section
+  secdata = ::elf_newdata(sec);
+  if (!secdata)
+  {
+    LOG(ERROR) << "Failed to elf_newdata(): " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  secdata->d_buf = section.data();
+  secdata->d_size = section.size();
+  secdata->d_type = ELF_T_BYTE;
+  secdata->d_version = EV_CURRENT;
+  secdata->d_align = 1;
+  secdata->d_off = 0;
+  ::elf_flagdata(secdata, ELF_C_SET, ELF_F_DIRTY);
+
+  // Get section header for new section
+  shdr = ::elf64_getshdr(sec);
+  if (!shdr)
+  {
+    LOG(ERROR) << "Failed to elf64_getshdr() new section: " << ::elf_errmsg(-1);
+    goto out;
+  }
+
+  // Update new section's header
+  shdr->sh_type = SHT_PROGBITS;
+  shdr->sh_name = secnameoff;
+  shdr->sh_entsize = 0;
+  shdr->sh_flags = 0;
+  shdr->sh_size = secdata->d_size;
+
+  if (::elf_update(elf, ELF_C_NULL) < 0)
+  {
+    LOG(ERROR) << "elf_update() (layout) failed: " << elf_errmsg(-1);
+    goto out;
+  }
+  if (::elf_update(elf, ELF_C_WRITE) < 0)
+  {
+    LOG(ERROR) << "Failed to elf_update() (write): " << elf_errmsg(-1);
+    goto out;
+  }
+
+  err = 0;
+out:
+  if (elf)
+    ::elf_end(elf);
+  if (fd >= 0)
+    ::close(fd);
+  return err;
 }
 
 } // namespace
