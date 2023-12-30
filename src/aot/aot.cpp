@@ -334,11 +334,11 @@ int inject_section(const std::string &out, std::vector<uint8_t> &section)
   shdr->sh_flags = 0;
   shdr->sh_size = secdata->d_size;
 
-  if (::elf_update(elf, ELF_C_NULL) < 0)
-  {
-    LOG(ERROR) << "elf_update() (layout) failed: " << elf_errmsg(-1);
-    goto out;
-  }
+  // Do not let libelf re-arrange sections. It does not care about program
+  // headers which leads to segfaults if not manually corrected. Since we
+  // are not moving phdrs around, just own the layout ourselves.
+  ::elf_flagelf(elf, ELF_C_SET, ELF_F_LAYOUT);
+
   if (::elf_update(elf, ELF_C_WRITE) < 0)
   {
     LOG(ERROR) << "Failed to elf_update() (write): " << elf_errmsg(-1);
