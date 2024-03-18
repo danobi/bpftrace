@@ -1,5 +1,7 @@
 #include "output.h"
 
+#include <sstream>
+
 #include "ast/async_event_types.h"
 #include "bpftrace.h"
 #include "log.h"
@@ -627,11 +629,35 @@ void TextOutput::value(BPFtrace &bpftrace,
   out_ << value_to_str(bpftrace, ty, value, false, 1) << std::endl;
 }
 
-void TextOutput::message(MessageType type __attribute__((unused)),
+namespace {
+std::string ToHex(const std::string &s, bool upper_case /* = true */)
+{
+  std::ostringstream ret;
+
+  for (std::string::size_type i = 0; i < s.length(); ++i)
+    ret << std::hex << std::setfill('0') << std::setw(2)
+        << (upper_case ? std::uppercase : std::nouppercase) << (int)s[i];
+
+  return ret.str();
+}
+} // namespace
+
+void TextOutput::message(MessageType type,
                          const std::string &msg,
                          bool nl) const
 {
+  if (type == MessageType::printf)
+    LOG(DEBUG) << "printf message, size=" << msg.size()
+               << " , msg=" << ToHex(msg, true);
   out_ << msg;
+  if (type == MessageType::printf) {
+    if (out_.bad())
+      LOG(DEBUG) << "out_ bad";
+    if (out_.fail())
+      LOG(DEBUG) << "out_ fail";
+    if (out_.eof())
+      LOG(DEBUG) << "out_ eof";
+  }
   if (nl)
     out_ << std::endl;
   else
