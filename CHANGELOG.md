@@ -33,6 +33,8 @@ and this project adheres to
   - [#3033](https://github.com/bpftrace/bpftrace/pull/3033)
 - Fix alignment of atomic map counter update
   - [#3045](https://github.com/bpftrace/bpftrace/pull/3045)
+- Fix potential loss of output at end of non-interactive tracing session
+  - [#3073](https://github.com/bpftrace/bpftrace/pull/3073)
 #### Docs
 #### Tools
 
