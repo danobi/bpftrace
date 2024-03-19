@@ -1,5 +1,6 @@
 #include "output.h"
 
+#include <cstdio>
 #include <sstream>
 
 #include "ast/async_event_types.h"
@@ -160,6 +161,8 @@ Output::~Output()
   // runtime test failures locally.
   out_ << std::flush;
   err_ << std::flush;
+
+  std::fflush(nullptr);
 }
 
 void Output::hist_prepare(const std::vector<uint64_t> &values,
