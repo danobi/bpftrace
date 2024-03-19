@@ -634,6 +634,8 @@ void TextOutput::message(MessageType type __attribute__((unused)),
   out_ << msg;
   if (nl)
     out_ << std::endl;
+  else
+    out_ << std::flush;
 }
 
 void TextOutput::lost_events(uint64_t lost) const
