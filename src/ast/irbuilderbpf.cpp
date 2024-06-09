@@ -387,8 +387,8 @@ CallInst *IRBuilderBPF::CreateGetStrScratchMap(int idx,
                              idx);
 }
 
-// createGetScratchMap will jump to failure_callback if it cannot find the map
-// value
+// createGetScratchMap will jump to failure_callback (if provided) if it cannot
+// find the map value
 CallInst *IRBuilderBPF::createGetScratchMap(const std::string &map_name,
                                             const std::string &name,
                                             PointerType *val_ptr_ty,
@@ -420,7 +420,7 @@ CallInst *IRBuilderBPF::createGetScratchMap(const std::string &map_name,
   CreateDebugOutput("unable to find the scratch map value for " + name,
                     std::vector<Value *>{},
                     loc);
-  CreateBr(failure_callback);
+  CreateBr(failure_callback ? failure_callback : lookup_merge_block);
 
   SetInsertPoint(lookup_merge_block);
   return call;

@@ -104,6 +104,15 @@ CodegenLLVM::CodegenLLVM(Node *root, BPFtrace &bpftrace, bool is_aot)
   license_var->setInitializer(
       ConstantDataArray::getString(module_->getContext(), license.c_str()));
   license_var->setSection("license");
+
+  // XXX: Set big string fallback
+  uint64_t max_strlen = bpftrace_.config_.get(ConfigKeyInt::max_strlen);
+  auto trunc = bpftrace_.config_.get(ConfigKeyString::str_trunc_trailer);
+  auto trunc_var = llvm::dyn_cast<GlobalVariable>(module_->getOrInsertGlobal(
+      "truncated", ArrayType::get(b_.getInt8Ty(), max_strlen)));
+  trunc_var->setInitializer(
+      ConstantDataArray::getString(module_->getContext(), trunc.c_str()));
+  trunc_var->setSection(".rodata");
 }
 
 void CodegenLLVM::visit(Integer &integer)
@@ -708,9 +717,9 @@ void CodegenLLVM::visit(Call &call)
     }
     expr_ = nullptr;
   } else if (call.func == "str") {
+    uint64_t max_strlen = bpftrace_.config_.get(ConfigKeyInt::max_strlen);
     // Largest read we'll allow = our global string buffer size
-    Value *strlen = b_.getInt64(
-        bpftrace_.config_.get(ConfigKeyInt::max_strlen));
+    Value *strlen = b_.getInt64(max_strlen);
     if (call.vargs->size() > 1) {
       auto scoped_del = accept(call.vargs->at(1));
       expr_ = b_.CreateIntCast(expr_, b_.getInt64Ty(), true);
@@ -730,29 +739,43 @@ void CodegenLLVM::visit(Call &call)
     }
 
     Function *parent = b_.GetInsertBlock()->getParent();
-    BasicBlock *failure_callback = BasicBlock::Create(module_->getContext(),
-                                                      "str_buffer_failure",
-                                                      parent);
-    BasicBlock *merge_block = BasicBlock::Create(module_->getContext(),
-                                                 "merge_block",
-                                                 parent);
+    BasicBlock *lookup_success_block = BasicBlock::Create(
+        module_->getContext(), "scratch_lookup_success", parent);
+    BasicBlock *lookup_failure_block = BasicBlock::Create(
+        module_->getContext(), "scratch_lookup_failure", parent);
+    BasicBlock *lookup_merge_block = BasicBlock::Create(module_->getContext(),
+                                                        "scratch_lookup_merge",
+                                                        parent);
 
-    Value *buf = b_.CreateGetStrScratchMap(str_id_, failure_callback, call.loc);
-    b_.CREATE_MEMSET(
-        buf, b_.getInt8(0), bpftrace_.config_.get(ConfigKeyInt::max_strlen), 1);
+    // Allocate a stack variable to hold ptr to scratch buffer
+    AllocaInst *ptr = b_.CreateAllocaBPF(b_.GET_PTR_TY(), "scratch_ptr");
+
+    // Try to get scratch buffer
+    Value *scratch = b_.CreateGetStrScratchMap(str_id_, nullptr, call.loc);
+    CmpInst::Predicate P = CmpInst::ICMP_NE;
+    Value *null = ConstantExpr::getCast(Instruction::IntToPtr,
+                                        b_.getInt64(0),
+                                        b_.GET_PTR_TY());
+    Value *cond = b_.CreateICmp(P, scratch, null, "scratch.lookup.cmp");
+    b_.CreateCondBr(cond, lookup_success_block, lookup_failure_block);
+
+    b_.SetInsertPoint(lookup_success_block);
+    b_.CREATE_MEMSET(scratch, b_.getInt8(0), max_strlen, 1);
     auto arg0 = call.vargs->front();
     auto scoped_del = accept(call.vargs->front());
     b_.CreateProbeReadStr(
-        ctx_, buf, strlen, expr_, arg0->type.GetAS(), call.loc);
-    b_.CreateBr(merge_block);
+        ctx_, scratch, strlen, expr_, arg0->type.GetAS(), call.loc);
+    b_.CreateStore(scratch, ptr);
+    b_.CreateBr(lookup_merge_block);
 
-    b_.SetInsertPoint(failure_callback);
-    auto trunc = bpftrace_.config_.get(ConfigKeyString::str_trunc_trailer);
-    auto ctrunc = ConstantDataArray::getString(module_->getContext(), trunc);
-    b_.CreateStore(ctrunc, buf);
-    b_.CreateBr(merge_block);
+    b_.SetInsertPoint(lookup_failure_block);
+    auto trunc_var = module_->getGlobalVariable("truncated");
+    b_.CreateStore(trunc_var, ptr);
+    b_.CreateBr(lookup_merge_block);
 
-    b_.SetInsertPoint(merge_block);
+    b_.SetInsertPoint(lookup_merge_block);
+    Value *buf = b_.CreateLoad(b_.GET_PTR_TY(), ptr);
+    b_.CreateLifetimeEnd(ptr);
 
     str_id_++;
     expr_ = buf;

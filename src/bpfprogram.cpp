@@ -188,6 +188,14 @@ void BpfProgram::relocateSection(const std::string &relsecname, bpf_insn *insns)
       std::string map_name = bpftrace_map_name(
           reinterpret_cast<const char *>(strtab.data() + sym->st_name));
 
+      // XXX: hack for global rodata
+      if (!bytecode_.hasMap(map_name)) {
+        const auto &map = bytecode_.getMap(".rodata");
+        insn->src_reg = BPF_PSEUDO_MAP_FD;
+        insn->imm = static_cast<int32_t>(map.fd);
+        continue;
+      }
+
       const auto &map = bytecode_.getMap(map_name);
       insn->src_reg = map.bpf_name() == to_string(MapType::MappedPrintfData)
                           ? BPF_PSEUDO_MAP_VALUE

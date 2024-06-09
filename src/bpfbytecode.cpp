@@ -19,6 +19,10 @@ BpfBytecode::BpfBytecode(const void *elf, size_t elf_size)
   struct bpf_map *m;
   bpf_map__for_each (m, bpf_object_.get()) {
     auto name = bpftrace_map_name(bpf_map__name(m));
+    if (name.find(".rodata") != std::string::npos) {
+      name = ".rodata";
+    }
+
     auto map = BpfMap(m);
     maps_.emplace(name, map);
   }
@@ -81,6 +85,11 @@ bool BpfBytecode::hasMap(MapType internal_type) const
 bool BpfBytecode::hasMap(const StackType &stack_type) const
 {
   return maps_.find(stack_type.name()) != maps_.end();
+}
+
+bool BpfBytecode::hasMap(const std::string &name) const
+{
+  return maps_.find(name) != maps_.end();
 }
 
 const BpfMap &BpfBytecode::getMap(const std::string &name) const
