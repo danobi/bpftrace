@@ -728,17 +728,34 @@ void CodegenLLVM::visit(Call &call)
       // maximum
       strlen = b_.CreateSelect(Cmp, proposed_strlen, strlen, "str.min.select");
     }
-    AllocaInst *buf = b_.CreateAllocaBPF(
-        bpftrace_.config_.get(ConfigKeyInt::max_strlen), "str");
+
+    Function *parent = b_.GetInsertBlock()->getParent();
+    BasicBlock *failure_callback = BasicBlock::Create(module_->getContext(),
+                                                      "str_buffer_failure",
+                                                      parent);
+    BasicBlock *merge_block = BasicBlock::Create(module_->getContext(),
+                                                 "merge_block",
+                                                 parent);
+
+    Value *buf = b_.CreateGetStrScratchMap(str_id_, failure_callback, call.loc);
     b_.CREATE_MEMSET(
         buf, b_.getInt8(0), bpftrace_.config_.get(ConfigKeyInt::max_strlen), 1);
     auto arg0 = call.vargs->front();
     auto scoped_del = accept(call.vargs->front());
     b_.CreateProbeReadStr(
         ctx_, buf, strlen, expr_, arg0->type.GetAS(), call.loc);
+    b_.CreateBr(merge_block);
 
+    b_.SetInsertPoint(failure_callback);
+    auto trunc = bpftrace_.config_.get(ConfigKeyString::str_trunc_trailer);
+    auto ctrunc = ConstantDataArray::getString(module_->getContext(), trunc);
+    b_.CreateStore(ctrunc, buf);
+    b_.CreateBr(merge_block);
+
+    b_.SetInsertPoint(merge_block);
+
+    str_id_++;
     expr_ = buf;
-    expr_deleter_ = [this, buf]() { b_.CreateLifetimeEnd(buf); };
   } else if (call.func == "buf") {
     Value *max_length = b_.getInt64(
         bpftrace_.config_.get(ConfigKeyInt::max_strlen));
@@ -3635,6 +3652,15 @@ void CodegenLLVM::generate_maps(const RequiredResources &resources)
                         MapKey({ CreateInt(loss_cnt_key_size) }),
                         CreateInt(loss_cnt_val_size));
   }
+
+  if (resources.str_buffers > 0) {
+    auto max_strlen = bpftrace_.config_.get(ConfigKeyInt::max_strlen);
+    createMapDefinition(to_string(MapType::StrBuffer),
+                        libbpf::BPF_MAP_TYPE_PERCPU_ARRAY,
+                        resources.str_buffers,
+                        MapKey({ CreateInt32() }),
+                        CreateArray(max_strlen, CreateInt8()));
+  }
 }
 
 void CodegenLLVM::emit_elf(const std::string &filename)
@@ -4262,7 +4288,8 @@ std::function<void()> CodegenLLVM::create_reset_ids()
           starting_non_map_print_id = this->non_map_print_id_,
           starting_watchpoint_id = this->watchpoint_id_,
           starting_cgroup_path_id = this->cgroup_path_id_,
-          starting_skb_output_id = this->skb_output_id_] {
+          starting_skb_output_id = this->skb_output_id_,
+          starting_str_id = this->str_id_] {
     this->b_.helper_error_id_ = starting_helper_error_id;
     this->printf_id_ = starting_printf_id;
     this->mapped_printf_id_ = starting_mapped_printf_id;
@@ -4275,6 +4302,7 @@ std::function<void()> CodegenLLVM::create_reset_ids()
     this->watchpoint_id_ = starting_watchpoint_id;
     this->cgroup_path_id_ = starting_cgroup_path_id;
     this->skb_output_id_ = starting_skb_output_id;
+    this->str_id_ = starting_str_id;
   };
 }
 
