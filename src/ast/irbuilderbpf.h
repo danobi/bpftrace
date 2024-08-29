@@ -33,6 +33,17 @@ public:
                BPFtrace &bpftrace,
                AsyncIds &async_ids);
 
+  // Reset the bpftrace stack.
+  //
+  // This must be called at the beginning of each subprog and probe.
+  // Stacks for subprogs _must_ provide a 0-indexed `subprog` index.
+  // While all probes can share the same percpu stack (b/c only one probe
+  // can run at a time per cpu), subprogs can be called from the middle
+  // of probes. For the "real" stack, you would push a new stack frame.
+  // But for bpftrace stack, XXX
+  void ResetBpftraceStack(std::optional<uint16> subprog = std::nullopt);
+
+  // Allocate from bpftrace stack.
   Value *CreateAllocaBPF(llvm::Type *ty, const std::string &name = "");
   Value *CreateAllocaBPF(const SizedType &stype, const std::string &name = "");
   Value *CreateAllocaBPFInit(const SizedType &stype, const std::string &name);
@@ -43,6 +54,7 @@ public:
                          llvm::Value *arraysize,
                          const std::string &name = "");
   Value *CreateAllocaBPF(int bytes, const std::string &name = "");
+
   void CreateMemsetBPF(Value *ptr, Value *val, uint32_t size);
   void CreateMemcpyBPF(Value *dst, Value *src, uint32_t size);
   llvm::Type *GetType(const SizedType &stype);
@@ -318,6 +330,10 @@ private:
                        const SizedType &type);
 
   std::map<std::string, StructType *> structs_;
+
+  // bpftrace stack. The stack must be reset for each subprog and probe.
+  Value *stack_ = nullptr;
+  uint64_t stack_offset = 0;
 };
 
 } // namespace ast
