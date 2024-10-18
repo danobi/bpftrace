@@ -739,11 +739,9 @@ int main(int argc, char* argv[])
   Config config = Config(!args.cmd_str.empty());
   BPFtrace bpftrace(std::move(output), args.no_feature, config);
 
-  if (!args.cmd_str.empty())
-    bpftrace.cmd_ = args.cmd_str;
-
   parse_env(bpftrace);
 
+  bpftrace.cmd_ = args.cmd_str;
   bpftrace.usdt_file_activation_ = args.usdt_file_activation;
   bpftrace.safe_mode_ = args.safe_mode;
   bpftrace.helper_check_level_ = args.helper_check_level;
@@ -761,16 +759,6 @@ int main(int argc, char* argv[])
       bpftrace.procmon_ = std::make_unique<ProcMon>(*maybe_pid);
     } catch (const std::exception& e) {
       LOG(ERROR) << e.what();
-      exit(1);
-    }
-  }
-
-  if (!args.cmd_str.empty()) {
-    bpftrace.cmd_ = args.cmd_str;
-    try {
-      bpftrace.child_ = std::make_unique<ChildProc>(args.cmd_str);
-    } catch (const std::runtime_error& e) {
-      LOG(ERROR) << "Failed to fork child: " << e.what();
       exit(1);
     }
   }
