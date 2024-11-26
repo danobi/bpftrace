@@ -3798,8 +3798,6 @@ libbpf::bpf_map_type CodegenLLVM::get_map_type(const SizedType &val_type,
   } else if (bpftrace_.feature_->has_map_percpu_hash() &&
              val_type.NeedsPercpuMap()) {
     return libbpf::BPF_MAP_TYPE_PERCPU_HASH;
-  } else if (!val_type.NeedsPercpuMap() && key_type.IsNoneTy()) {
-    return libbpf::BPF_MAP_TYPE_ARRAY;
   } else {
     return libbpf::BPF_MAP_TYPE_HASH;
   }
