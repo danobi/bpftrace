@@ -1305,17 +1305,7 @@ void CodegenLLVM::visit(Call &call)
     auto &arg = *call.vargs.at(0);
     auto &map = static_cast<Map &>(arg);
 
-    // Some map types used in bpftrace (BPF_MAP_TYPE_(PERCPU_)ARRAY) do not
-    // implement per-cpu counters and bpf_map_sum_elem_count would always return
-    // 0 for them. In our case, those maps typically have a single element so we
-    // can return 1 straight away.
-    // For the rest, use bpf_map_sum_elem_count if available and map supports
-    // it, otherwise fall back to bpf_for_each_map_elem with a custom callback.
-    if (map_has_single_elem(map.type, map.key_type)) {
-      expr_ = b_.getInt64(1);
-    } else if (bpftrace_.feature_->has_kernel_func(
-                   Kfunc::bpf_map_sum_elem_count) &&
-               !is_array_map(map.type, map.key_type)) {
+    if (bpftrace_.feature_->has_kernel_func(Kfunc::bpf_map_sum_elem_count)) {
       expr_ = CreateKernelFuncCall(Kfunc::bpf_map_sum_elem_count,
                                    { b_.GetMapVar(map.ident) },
                                    "len");
@@ -1536,7 +1526,7 @@ void CodegenLLVM::visit(Map &map)
 
   const auto &val_type = map_info->second.value_type;
   Value *value;
-  if (canAggPerCpuMapElems(val_type, map_info->second.key_type)) {
+  if (val_type.IsCastableMapTy()) {
     value = b_.CreatePerCpuMapAggElems(ctx_, map, key, val_type, map.loc);
   } else {
     value = b_.CreateMapLookupElem(ctx_, map, key, map.loc);
@@ -3790,32 +3780,13 @@ void CodegenLLVM::createMapDefinition(const std::string &name,
   var->addDebugInfo(debuginfo);
 }
 
-libbpf::bpf_map_type CodegenLLVM::get_map_type(const SizedType &val_type,
-                                               const SizedType &key_type)
+libbpf::bpf_map_type CodegenLLVM::get_map_type(const SizedType &val_type)
 {
-  if (val_type.IsCountTy() && key_type.IsNoneTy()) {
-    return libbpf::BPF_MAP_TYPE_PERCPU_ARRAY;
-  } else if (val_type.NeedsPercpuMap()) {
+  if (val_type.NeedsPercpuMap()) {
     return libbpf::BPF_MAP_TYPE_PERCPU_HASH;
   } else {
     return libbpf::BPF_MAP_TYPE_HASH;
   }
-}
-
-bool CodegenLLVM::is_array_map(const SizedType &val_type,
-                               const SizedType &key_type)
-{
-  auto map_type = get_map_type(val_type, key_type);
-  return map_type == libbpf::BPF_MAP_TYPE_ARRAY ||
-         map_type == libbpf::BPF_MAP_TYPE_PERCPU_ARRAY;
-}
-
-// Check if we can special-case the map to have a single element. This is done
-// for keyless maps (e.g. @x = 1 or @++) of BPF_MAP_TYPE_(PERCPU_)ARRAY type.
-bool CodegenLLVM::map_has_single_elem(const SizedType &val_type,
-                                      const SizedType &key_type)
-{
-  return is_array_map(val_type, key_type) && key_type.IsNoneTy();
 }
 
 // Emit maps in libbpf format so that Clang can create BTF info for them which
@@ -3852,7 +3823,7 @@ void CodegenLLVM::generate_maps(const RequiredResources &required_resources,
     const auto &key_type = info.key_type;
 
     auto max_entries = bpftrace_.config_.get(ConfigKeyInt::max_map_keys);
-    auto map_type = get_map_type(val_type, key_type);
+    auto map_type = get_map_type(val_type);
 
     // hist() and lhist() transparently create additional elements in whatever
     // map they are assigned to. So even if the map looks like it has no keys,
@@ -4562,7 +4533,7 @@ Function *CodegenLLVM::createForEachMapCallback(const For &f, llvm::Type *ctx_t)
   Value *val = callback->getArg(2);
 
   const auto &map_val_type = map_info->second.value_type;
-  if (canAggPerCpuMapElems(map_val_type, map_info->second.key_type)) {
+  if (map_val_type.IsCastableMapTy()) {
     AllocaInst *key_ptr = b_.CreateAllocaBPF(b_.GetType(key_type),
                                              "lookup_key");
     b_.CreateStore(key, key_ptr);
@@ -4619,15 +4590,6 @@ Function *CodegenLLVM::createForEachMapCallback(const For &f, llvm::Type *ctx_t)
 
   b_.restoreIP(saved_ip);
   return callback;
-}
-
-bool CodegenLLVM::canAggPerCpuMapElems(const SizedType &val_type,
-                                       const SizedType &key_type)
-{
-  auto map_type = get_map_type(val_type, key_type);
-  return val_type.IsCastableMapTy() &&
-         (map_type == libbpf::BPF_MAP_TYPE_PERCPU_ARRAY ||
-          map_type == libbpf::BPF_MAP_TYPE_PERCPU_HASH);
 }
 
 // BPF helpers that use fmt strings (bpf_trace_printk, bpf_seq_printf) expect

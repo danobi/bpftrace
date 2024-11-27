@@ -110,11 +110,7 @@ public:
                        Value *src_val);
 
   void generate_ir(void);
-  libbpf::bpf_map_type get_map_type(const SizedType &val_type,
-                                    const SizedType &key_type);
-  bool is_array_map(const SizedType &val_type, const SizedType &key_type);
-  bool map_has_single_elem(const SizedType &val_type,
-                           const SizedType &key_type);
+  libbpf::bpf_map_type get_map_type(const SizedType &val_type);
   void generate_maps(const RequiredResources &rr, const CodegenResources &cr);
   void generate_global_vars(const RequiredResources &resources,
                             const ::bpftrace::Config &bpftrace_config);
@@ -262,9 +258,6 @@ private:
   Function *createMurmurHash2Func();
 
   Value *createFmtString(int print_id);
-
-  bool canAggPerCpuMapElems(const SizedType &val_type,
-                            const SizedType &key_type);
 
   void maybeAllocVariable(const std::string &var_ident,
                           const SizedType &var_type,
