@@ -80,6 +80,7 @@ enum Options {
   NO_FEATURE,
   DEBUG,
   DRY_RUN,
+  NO_RUN,
 };
 } // namespace
 
@@ -116,6 +117,7 @@ void usage(std::ostream& out)
   out << "TROUBLESHOOTING OPTIONS:" << std::endl;
   out << "    -v                      verbose messages" << std::endl;
   out << "    --dry-run               terminate execution right after attaching all the probes" << std::endl;
+  out << "    --no-run                terminate execution right after compilation (drier than --dry-run)" << std::endl;
   out << "    -d STAGE                debug info for various stages of bpftrace execution" << std::endl;
   out << "                            ('all', 'ast', 'codegen', 'codegen-opt', 'dis', 'libbpf', 'verifier')" << std::endl;
   out << "    --emit-elf FILE         (dry run) generate ELF file with bpf programs and write to FILE" << std::endl;
@@ -510,6 +512,7 @@ Args parse_args(int argc, char* argv[])
     option{ "no-feature", required_argument, nullptr, Options::NO_FEATURE },
     option{ "debug", required_argument, nullptr, Options::DEBUG },
     option{ "dry-run", no_argument, nullptr, Options::DRY_RUN },
+    option{ "no-run", no_argument, nullptr, Options::NO_RUN },
     option{ nullptr, 0, nullptr, 0 }, // Must be last
   };
 
@@ -848,17 +851,20 @@ int main(int argc, char* argv[])
     bpftrace.add_param(param);
   }
 
-  check_is_root();
+  // If we are not running anything, then we don't require root.
+  if (args.test_mode != TestMode::CODEGEN) {
+    check_is_root();
 
-  auto lockdown_state = lockdown::detect();
-  if (lockdown_state == lockdown::LockdownState::Confidentiality) {
-    lockdown::emit_warning(std::cerr);
-    return 1;
+    auto lockdown_state = lockdown::detect();
+    if (lockdown_state == lockdown::LockdownState::Confidentiality) {
+      lockdown::emit_warning(std::cerr);
+      return 1;
+    }
+
+    // FIXME (mmarchini): maybe we don't want to always enforce an infinite
+    // rlimit?
+    enforce_infinite_rlimit();
   }
-
-  // FIXME (mmarchini): maybe we don't want to always enforce an infinite
-  // rlimit?
-  enforce_infinite_rlimit();
 
   auto ast_ctx = parse(
       bpftrace, filename, program, args.include_dirs, args.include_files);

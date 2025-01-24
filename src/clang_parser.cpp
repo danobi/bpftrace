@@ -583,10 +583,6 @@ bool ClangParser::parse(ast::Program *program,
                         BPFtrace &bpftrace,
                         std::vector<std::string> extra_flags)
 {
-#ifdef FUZZ
-  StderrSilencer silencer;
-  silencer.silence();
-#endif
   input = "#include </bpftrace/include/__btf_generated_header.h>\n" +
           program->c_definitions;
 
