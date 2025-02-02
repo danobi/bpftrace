@@ -88,6 +88,12 @@ def sudo() -> Path:
     return _which("sudo")
 
 
+@lru_cache(maxsize=1)
+def lsan_options() -> str:
+    """Returns leak sanitizer environment variable options"""
+    return f"suppressions={root()}/.github/include/leaks.txt,print_suppressions=0"
+
+
 def shell(
     cmd: List[str],
     as_root: bool = False,
@@ -252,6 +258,7 @@ def run_runtime_tests():
             "RUNTIME_TEST_COLOR": "yes",
             # Disable UI to make CI and manual runs behave identically
             "VMTEST_NO_UI": "1",
+            "LSAN_OPTIONS": lsan_options(),
         },
     )
 
@@ -275,7 +282,10 @@ def test():
             lambda: shell(
                 ["./tests/bpftrace_test"],
                 cwd=Path(BUILD_DIR),
-                env={"GTEST_COLOR": "yes"},
+                env={
+                    "GTEST_COLOR": "yes",
+                    "LSAN_OPTIONS": lsan_options(),
+                },
             ),
         )
     )
@@ -299,6 +309,7 @@ def test():
                 env={
                     "TOOLS_TEST_OLDVERSION": TOOLS_TEST_OLDVERSION,
                     "TOOLS_TEST_DISABLE": TOOLS_TEST_DISABLE,
+                    "LSAN_OPTIONS": lsan_options(),
                 },
             ),
         )
@@ -327,6 +338,7 @@ def test():
                 env={
                     "CI": CI,
                     "RUNTIME_TEST_COLOR": "yes",
+                    "LSAN_OPTIONS": lsan_options(),
                 },
             ),
         )

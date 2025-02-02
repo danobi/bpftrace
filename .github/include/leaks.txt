@@ -1,0 +1,8 @@
+# At time of writing, LLDB knowingly leaks python resources due
+# to invalid assumptions.
+#
+# So suppress leaks coming from libpython. Long term we need to
+# find a way to deal with LLDB behaving so poorly.
+#
+# See: https://github.com/llvm/llvm-project/blob/2eabcb73c/lldb/source/Plugins/ScriptInterpreter/Python/ScriptInterpreterPython.cpp#L3170-L3184
+leak:libpython
