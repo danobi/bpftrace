@@ -464,8 +464,11 @@ PROG hardware:cache-misses:10 { print(probe); exit();}
 EXPECT hardware:cache-misses:10
 
 NAME probe_builtin_string_compare
-RUN {{BPFTRACE}} -e 'uprobe:testprogs/uprobe_test:uprobeFunction* { if (strcontains(probe, "uprobeFunction2")) { print(probe); } }' -c ./testprogs/uprobe_test
+PROG uprobe:testprogs/uprobe_test:uprobeFunction* { if (strcontains(probe, "uprobeFunction2")) { print(probe); exit(); } }
+AFTER ./testprogs/uprobe_test
 EXPECT uprobe:testprogs/uprobe_test:uprobeFunction2
+# For some reason LLVM versions older than just generate code that does not pass BPF verifier
+MIN_LLVM 18
 
 NAME probe_builtin_scratch_buf
 PROG config = { on_stack_limit = 0 } software:cpu:100000 { print(probe); exit(); }
