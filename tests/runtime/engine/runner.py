@@ -70,6 +70,7 @@ class Runner(object):
     SKIP_AOT_NOT_SUPPORTED = 7
     SKIP_KERNEL_VERSION_MAX = 8
     SKIP_NOT_IN_ALLOWLIST = 9
+    SKIP_LLVM_VERSION_MIN = 10
 
     @staticmethod
     def failed(status):
@@ -84,6 +85,7 @@ class Runner(object):
         return status in [
             Runner.SKIP_KERNEL_VERSION_MIN,
             Runner.SKIP_KERNEL_VERSION_MAX,
+            Runner.SKIP_LLVM_VERSION_MIN,
             Runner.SKIP_REQUIREMENT_UNSATISFIED,
             Runner.SKIP_ENVIRONMENT_DISABLED,
             Runner.SKIP_FEATURE_REQUIREMENT_UNSATISFIED,
@@ -95,8 +97,10 @@ class Runner(object):
     def skip_reason(test, status):
         if status == Runner.SKIP_KERNEL_VERSION_MIN:
             return "min Kernel: %s" % test.kernel_min
-        if status == Runner.SKIP_KERNEL_VERSION_MAX:
+        elif status == Runner.SKIP_KERNEL_VERSION_MAX:
             return "max Kernel: %s" % test.kernel_max
+        elif status == Runner.SKIP_LLVM_VERSION_MIN:
+            return "min LLVM: %s" % test.llvm_min
         elif status == Runner.SKIP_REQUIREMENT_UNSATISFIED:
             return "unmet condition: '%s'" % ' && '.join(test.requirement)
         elif status == Runner.SKIP_FEATURE_REQUIREMENT_UNSATISFIED:
@@ -164,6 +168,7 @@ class Runner(object):
         bpffeature["get_tai_ns"] = output.find("get_ktime_ns: yes") != -1
         bpffeature["get_func_ip"] = output.find("get_func_ip: yes") != -1
         bpffeature["jiffies64"] = output.find("jiffies64: yes") != -1
+        bpffeature["llvm_version"] = re.search(r"LLVM: ([^\n]+)", output).group(1)
         return bpffeature
 
 
@@ -221,6 +226,13 @@ class Runner(object):
         if test.kernel_max and LooseVersion(test.kernel_max) < current_kernel:
             print(warn("[   SKIP   ] ") + "%s.%s" % (test.suite, test.name))
             return Runner.SKIP_KERNEL_VERSION_MAX
+
+        if test.llvm_min:
+            bpffeature = Runner.__get_bpffeature()
+            llvm_version = LooseVersion(bpffeature["llvm_version"])
+            if llvm_version < LooseVersion(test.llvm_min):
+                print(warn("[   SKIP   ] ") + "%s.%s" % (test.suite, test.name))
+                return Runner.SKIP_LLVM_VERSION_MIN
 
         if test.skip_if_env_has and os.environ.get(test.skip_if_env_has[0], '') == test.skip_if_env_has[1]:
             print(warn("[   SKIP   ] ") + "%s.%s" % (test.suite, test.name))

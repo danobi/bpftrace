@@ -38,6 +38,7 @@ TestStruct = namedtuple(
         'suite',
         'kernel_min',
         'kernel_max',
+        'llvm_min',
         'requirement',
         'env',
         'arch',
@@ -128,6 +129,7 @@ class TestParser(object):
         new_pidns = False
         skip_if_env_has = None
         return_code = None
+        llvm_min = ''
         prev_item_name = ''
 
         for item in test:
@@ -183,6 +185,8 @@ class TestParser(object):
                 kernel_min = line
             elif item_name == 'MAX_KERNEL':
                 kernel_max = line
+            elif item_name == "MIN_LLVM":
+                llvm_min = line.strip()
             elif item_name == 'REQUIRES':
                 requirement.append(line)
             elif item_name == 'ENV':
@@ -265,6 +269,7 @@ class TestParser(object):
             test_suite,
             kernel_min,
             kernel_max,
+            llvm_min,
             requirement,
             env,
             arch,
