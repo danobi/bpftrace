@@ -56,8 +56,6 @@ NAME exact match
 PROG BEGIN { print(strcontains("hello", "hello")); exit(); }
 EXPECT 1
 TIMEOUT 1
-# For some reason LLVM versions older than just generate code that does not pass BPF verifier
-MIN_LLVM 18
 
 NAME needle longer than haystack
 PROG BEGIN { print(strcontains("hello", "hello-longer")); exit(); }
@@ -98,8 +96,6 @@ NAME null character in needle
 PROG BEGIN { $needle = "wo\0rld"; print(strcontains("hello world", $needle)); exit(); }
 EXPECT 1
 TIMEOUT 1
-# See above
-MIN_LLVM 18
 
 NAME null character in both
 PROG BEGIN { $haystack = "hello\0world"; $needle = "wo\0rld"; print(strcontains($haystack, $needle)); exit(); }
