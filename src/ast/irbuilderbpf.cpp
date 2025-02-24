@@ -1666,7 +1666,7 @@ Value *IRBuilderBPF::CreateStrcontains(Value *haystack,
   //       if (needle[j] == '\0')
   //         return true;
   //
-  //       if ((i+j) >= haystack_sz || haystack[i+j] == '\0' || haystack[i+j] != needle[j])
+  //       if ((i+j) >= haystack_sz || haystack[i+j] != needle[j])
   //         break;
   //     }
   //   }
@@ -1695,6 +1695,9 @@ Value *IRBuilderBPF::CreateStrcontains(Value *haystack,
   BasicBlock *inner_notnull = BasicBlock::Create(module_.getContext(),
                                                  "strcontains.inner.notnull",
                                                  parent);
+  BasicBlock *inner_cmp = BasicBlock::Create(module_.getContext(),
+                                             "strcontains.inner.cmp",
+                                             parent);
   BasicBlock *inner_incr = BasicBlock::Create(module_.getContext(),
                                               "strcontains.inner.incr",
                                               parent);
@@ -1749,17 +1752,18 @@ Value *IRBuilderBPF::CreateStrcontains(Value *haystack,
   Value *needle_null = CreateICmpEQ(needle_char, null_byte);
   CreateCondBr(needle_null, done_true, inner_notnull);
 
-  // Inner conditional matching haystack char with needle char
   SetInsertPoint(inner_notnull);
   Value *haystack_cmp_idx = CreateAdd(i_val, j_val);
   Value *haystack_cmp_outbounds = CreateICmpUGE(haystack_cmp_idx,
                                                 getInt64(haystack_sz));
+  CreateCondBr(haystack_cmp_outbounds, outer_incr, inner_cmp);
+
+  // Inner conditional matching haystack char with needle char
+  SetInsertPoint(inner_cmp);
   Value *haystack_cmp_char = CreateLoad(
       getInt8Ty(), CreateGEP(getInt8Ty(), haystack, { haystack_cmp_idx }));
-  Value *haystack_cmp_null = CreateICmpEQ(haystack_cmp_char, null_byte);
   Value *haystack_cmp_needle = CreateICmpNE(haystack_cmp_char, needle_char);
-  Value *haystack_cmp_cond = CreateOr(
-      { haystack_cmp_outbounds, haystack_cmp_null, haystack_cmp_needle });
+  Value *haystack_cmp_cond = CreateOr(haystack_cmp_outbounds, haystack_cmp_needle);
   CreateCondBr(haystack_cmp_cond, outer_incr, inner_incr);
 
   SetInsertPoint(inner_incr);
