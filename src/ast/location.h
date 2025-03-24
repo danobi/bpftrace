@@ -70,6 +70,12 @@ public:
     return { std::move(lines), std::move(columns), source_ };
   }
 
+  // Checks if this location contains another location.
+  //
+  // A location contains another if both are from the same source and the
+  // line/column ranges of other are within or equal to this location's ranges.
+  bool contains(const Location &other) const;
+
 private:
   using range_t = std::pair<unsigned int, unsigned int>;
   Location(range_t &&lines,
