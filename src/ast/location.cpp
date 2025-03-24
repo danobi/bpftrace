@@ -21,6 +21,29 @@ std::string Location::filename() const
   return "";
 }
 
+bool Location::contains(const Location &other) const
+{
+  // Different sources means no containment
+  if (filename() != other.filename())
+    return false;
+
+  // Check line range containment
+  if (line_range_.first > other.line_range_.first ||
+      line_range_.second < other.line_range_.second)
+    return false;
+
+  // If lines are exactly at boundaries, check column containment
+  if (line_range_.first == other.line_range_.first &&
+      column_range_.first > other.column_range_.first)
+    return false;
+
+  if (line_range_.second == other.line_range_.second &&
+      column_range_.second < other.column_range_.second)
+    return false;
+
+  return true;
+}
+
 std::string Location::source_location() const
 {
   std::stringstream ss;
