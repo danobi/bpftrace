@@ -163,6 +163,7 @@ Expression *MacroExpansion::replace(Call *call, [[maybe_unused]] void *ret)
 
     Macro *macro = it->second;
     Expression *expr = MacroSpecializer(ast_).specialize(*macro, *call);
+    expr->addContext() << "in expansion of call to macro: '" << call->func << "'";
     if (expr) {
       return expr;
     } else {
