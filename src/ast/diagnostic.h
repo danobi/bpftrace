@@ -18,6 +18,10 @@ class ASTSource;
 class Diagnostic {
 public:
   enum class Severity {
+    // Contextual diagnostics, when present, are emitted along with all
+    // other diagnostics of any severity. They should only be used when
+    // something is relevant to all diagnostics on a node.
+    Context,
     Warning,
     Error,
   };
@@ -80,6 +84,11 @@ public:
   Diagnostic& addWarning(Args... args)
   {
     return add(Severity::Warning, args...);
+  }
+  template <typename... Args>
+  Diagnostic& addContext(Args... args)
+  {
+    return add(Severity::Context, args...);
   }
   bool has(Severity severity) const
   {

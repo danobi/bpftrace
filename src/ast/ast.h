@@ -90,6 +90,15 @@ public:
       return diagnostics_.addWarning(loc + (args.loc + ...));
     }
   }
+  template <typename... Args>
+  Diagnostic &addContext(Args &...args) const
+  {
+    if constexpr (sizeof...(Args) == 0) {
+      return diagnostics_.addContext(loc);
+    } else {
+      return diagnostics_.addContext(loc + (args.loc + ...));
+    }
+  }
 
 private:
   Diagnostics &diagnostics_;
