@@ -93,8 +93,9 @@ std::ostream &operator<<(std::ostream &out, MessageType type)
     case MessageType::lost_events:
       out << "lost_events";
       break;
-    default:
-      out << "?";
+    case MessageType::helper_error:
+      out << "helper_error";
+      break;
   }
   return out;
 }
