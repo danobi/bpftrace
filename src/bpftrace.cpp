@@ -186,7 +186,7 @@ int BPFtrace::num_probes() const
 void BPFtrace::request_finalize()
 {
   finalize_ = true;
-  attached_probes_.clear();
+  detach_probes();
   if (child_)
     child_->terminate();
 }
@@ -1022,7 +1022,7 @@ int BPFtrace::run(BpfBytecode bytecode)
                  << strerror(-err);
 #endif
 
-  attached_probes_.clear();
+  detach_probes();
   // finalize_ and exitsig_recv should be false from now on otherwise
   // perf_event_printer() can ignore the `END` events.
   finalize_ = false;
@@ -1246,6 +1246,12 @@ int BPFtrace::print_maps()
   }
 
   return 0;
+}
+
+void BPFtrace::detach_probes()
+{
+  out_->detached_probes(num_probes());
+  attached_probes_.clear();
 }
 
 // clear a map

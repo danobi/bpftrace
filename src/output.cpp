@@ -90,6 +90,9 @@ std::ostream &operator<<(std::ostream &out, MessageType type)
     case MessageType::attached_probes:
       out << "attached_probes";
       break;
+    case MessageType::detached_probes:
+      out << "detached_probes";
+      break;
     case MessageType::lost_events:
       out << "lost_events";
       break;
@@ -837,6 +840,17 @@ void TextOutput::attached_probes(uint64_t num_probes) const
     out_ << "Attaching " << num_probes << " probes..." << std::endl;
 }
 
+void TextOutput::detached_probes(uint64_t num_probes) const
+{
+  // This is triggered by user hitting ctrl-c more often than not, so
+  // insert a newline before the message so our detach message is more
+  // readable.
+  if (num_probes == 1)
+    out_ << "\nDetaching " << num_probes << " probe..." << std::endl;
+  else
+    out_ << "\nDetaching " << num_probes << " probes..." << std::endl;
+}
+
 void TextOutput::helper_error(int retcode, const HelperErrorInfo &info) const
 {
   LOG(WARNING,
@@ -1135,6 +1149,11 @@ void JsonOutput::lost_events(uint64_t lost) const
 void JsonOutput::attached_probes(uint64_t num_probes) const
 {
   message(MessageType::attached_probes, "probes", num_probes);
+}
+
+void JsonOutput::detached_probes(uint64_t num_probes) const
+{
+  message(MessageType::detached_probes, "probes", num_probes);
 }
 
 void JsonOutput::helper_error(int retcode, const HelperErrorInfo &info) const
